@@ -1,127 +1,118 @@
-# TrustConstruct
+# 🎯 TrustConstruct
 
-A blockchain-anchored quality assurance system for the construction industry
+## 🧱 Overview
 
-TrustConstruct is a hybrid Web2/Web3 solution that modernizes construction quality documentation.
-Instead of paper-based control reports stored in binders, TrustConstruct enables workers, subcontractors and site managers to create AMA-referenced digital reports that are stored securely in a backend while a cryptographic hash of each report is anchored immutably on the Ethereum Sepolia test network.
+TrustConstruct is a blockchain-powered system designed to modernize AMA-referenced construction quality documentation.  
+Traditional paper reports are inefficient, hard to verify, and easy to lose.  
+TrustConstruct replaces them with a **digital, immutable, and verifiable** workflow anchored on the Ethereum Sepolia test network.
 
-This ensures transparency, long-term verifiability and protection against manipulation — without exposing sensitive information on-chain.
-
----
-
-## 🚧 Background & Industry Problem
-
-Based on more than 20 years of experience in the Swedish construction sector, traditional quality documentation suffers from several issues:
-
-- Reports are written on paper
-- They are stored in binders or scanned manually
-- They are difficult to search and track
-- They can be misplaced or altered
-- Transparency for inspectors, clients or developers is limited
-
-These reports are critical because they verify that work steps — such as waterproofing, installation, structural components and AMA-referenced tasks — have been executed correctly.
-
-TrustConstruct replaces the analogue process with a digital, verifiable workflow supported by blockchain.
+Workers authenticate internally (name + PIN or worker ID), while a **company-owned OKX Wallet** performs all blockchain anchoring.  
+This approach mirrors real-world enterprise workflows and ensures strong data integrity without requiring users to interact with wallets.
 
 ---
 
-## 📘 What is AMA (Swedish Construction Standard)?
+## 🚀 Key Features
 
-AMA stands for “Allmän Material- och Arbetsbeskrivning”, meaning _General Material and Work Descriptions_.  
-It is Sweden’s national technical standard for how construction work must be performed.
-
-AMA covers:
-
-- Work methods
-- Material requirements
-- Quality levels
-- Safety standards
-- Technical descriptions for each building element
-
-TrustConstruct references AMA sections without reproducing licensed text,
-ensuring legal compliance while improving documentation quality.
+- Digital AMA-referenced control reports
+- Internal worker authentication (no personal wallet required)
+- Immutable blockchain anchoring via a company-owned OKX Wallet
+- Secure backend storage for full human-readable reports
+- SHA-256 hashing to prevent tampering
+- Verification through hash comparison with the blockchain
+- Project → Apartment → Room → Component navigation flow
+- Searchable history of submitted reports
 
 ---
 
-## 🎯 Project Purpose
+## 🎯 Purpose
 
-The goal is to deliver a working prototype where users can:
+TrustConstruct ensures that every AMA control report is:
 
-- Select a project → apartment → room → component
-- Fill an AMA-referenced control report
-- Digitally sign the report through OKX Wallet
-- Store the full human-readable report in a secure backend
-- Store a hashed representation + metadata immutably on-chain
-- Search and verify previous reports
-- Confirm report authenticity by comparing recomputed and on-chain hashes
+- Authenticated to a specific worker
+- Safely stored in a backend database
+- Anchored on-chain using tamper-proof hashing
+- Verifiable long after the project is completed
 
-This creates a transparent and tamper-proof documentation system suitable for contractors,
-inspectors and property developers.
-
----
-
-## 👥 Target Audience
-
-- Construction workers
-- Site managers
-- Subcontractors
-- Quality inspectors
-- Developers and real estate owners
-- Clients who require trusted documentation
+This provides **traceability, transparency, and long-term reliability** for construction quality documentation.
 
 ---
 
 ## 🛠 Tech Stack
 
-**Smart Contracts**
-
-- Solidity
-- Foundry
-- OpenZeppelin
-- Ethereum Sepolia test network
-
-**Frontend**
+### Frontend
 
 - React (Vite)
-- OKX Wallet integration
-- Viem (for blockchain communication)
+- Internal login system (name + PIN / worker ID)
+- Viem (read-only blockchain queries)
+- Component-based architecture
 
-**Backend**
+### Backend
 
-- Node.js + Express
-- MongoDB (off-chain storage)
-- Crypto module (hashing)
-- REST API for report submission, retrieval and verification
+- Node.js / Express
+- Worker authentication
+- Cryptographic hashing (SHA-256)
+- MongoDB or (or JSON during prototype phase)
+- OKX Wallet integration (company-owned) for blockchain anchoring
+- REST API for submissions and verifications
 
-**Other**
+### Blockchain
 
-- GitHub for version control
-- Documentation stored in /docs
+- Ethereum Sepolia Testnet
+- Smart contract storing:
+  - report hash
+  - metadata (project, apartment, room, component)
+- No human-readable or personal data stored on-chain
 
 ---
 
-## 📡 System Overview — How It Works
+## 🔧 How the System Works (Simplified Flow)
 
-1.  User opens the application.
-2.  User connects via OKX Wallet.
-3.  User selects project → apartment → room → component.
-4.  User fills in an AMA-referenced quality report.
-5.  User signs the submission.
-6.  The full report is sent to the backend.
-7.  Backend stores the human-readable report in MongoDB.
-8.  Backend calculates a cryptographic SHA-256 hash of the report and sends
-    the hash + key metadata (project, apartment, room, component) to the smart contract.
-9.  Report becomes searchable in the application.
-10. When verifying a report, the frontend retrieves the stored report from the backend,
-    recomputes the hash and compares it to the on-chain hash.
-11. If hashes match, the report is confirmed authentic and unchanged.
+1. Worker opens the application
+2. Authenticates via internal login (name + PIN or worker ID)
+3. Selects project → apartment → room → component
+4. Fills out AMA-referenced control form
+5. Backend logs:
+   - worker identity
+   - timestamp
+   - full human-readable report
+6. Backend computes SHA-256 hash
+7. Backend uses the **company-owned OKX Wallet** to anchor hash + metadata on Sepolia
+8. During verification:
+   - stored report is fetched
+   - hash is recomputed
+   - compared with the blockchain value
+   - if equal → **Verified ✔**
 
-This architecture ensures:
+---
 
-- No personal data is stored on-chain
-- GDPR compliance
-- Immutable proof of authenticity
-- Searchable, human-readable documentation off-chain
+## 🔍 Blockchain Anchoring Explained
+
+When a report is submitted:
+
+- The full report is stored securely in the backend
+- Backend computes a SHA-256 hash
+- Hash + metadata is written to the blockchain via the company OKX Wallet
+
+On-chain data contains **no personal information**, only a cryptographic fingerprint.
+
+For verification:
+
+- The stored report is retrieved
+- A new hash is computed
+- The system checks if it matches the blockchain hash
+
+Matching values prove the report has **never been altered**.
+
+---
+
+## ⚖️ Legal & Ethical Considerations
+
+- No personal data stored on-chain
+- Only hashed values and non-sensitive metadata are public
+- Worker identity handled internally, not via wallet
+- Organization controls private keys used on-chain
+- GDPR compliant through strict separation of storage layers
+- AMA references used legally without reproducing copyrighted text
 
 ---
 
@@ -149,17 +140,6 @@ trustconstruct/
 ```
 
 ---
-
-## 📁 Legal & Ethical Considerations
-
-- Only hashed values + metadata are stored on-chain.
-- Full human-readable reports remain securely off-chain in the backend.
-- Blockchain data is immutable — accidental or incorrect on-chain entries cannot be removed.
-- AMA references are used legally without reproducing copyrighted text.
-- On-chain data is non-sensitive and cannot be interpreted from Etherscan alone.
-- The verification process relies on recomputing the hash locally, not exposing any personal data publicly.
-
-This approach ensures GDPR compliance while providing transparency and security.
 
 ## 👤 About the Author
 
