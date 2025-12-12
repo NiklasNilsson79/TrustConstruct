@@ -91,7 +91,7 @@ When a report is submitted:
 
 - The full report is stored securely in the backend
 - Backend computes a SHA-256 hash
-- Hash + metadata is written to the blockchain via the company OKX Wallet
+- Hash + metadata is written to the blockchain on Sepolia via the company OKX Wallet
 
 On-chain data contains **no personal information**, only a cryptographic fingerprint.
 
