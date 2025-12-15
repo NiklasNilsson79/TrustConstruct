@@ -1,4 +1,9 @@
-// Placeholder backend server for Sprint 2.
-// Full Express implementation will be added in Sprint 3 (Weeks 5–6).
+require('dotenv').config();
 
-console.log('TrustConstruct backend placeholder server initialized');
+const app = require('./src/app');
+
+const PORT = process.env.PORT || 4000;
+
+app.listen(PORT, () => {
+  console.log(`Backend listening on http://localhost:${PORT}`);
+});

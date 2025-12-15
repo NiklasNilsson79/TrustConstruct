@@ -1,4 +1,14 @@
-// Placeholder Express app structure.
-// Real Express configuration will be implemented in Sprint 3.
+const express = require('express');
+const authRoutes = require('./routes/authRoutes');
 
-export default {};
+const app = express();
+
+app.use(express.json());
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+app.use('/api/auth', authRoutes);
+
+module.exports = app;
