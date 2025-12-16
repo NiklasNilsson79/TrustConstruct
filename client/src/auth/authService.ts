@@ -5,6 +5,25 @@ type LoginResponse = {
   user: AuthUser;
 };
 
+// RIKTIG login (backend)
+export async function login(
+  email: string,
+  password: string
+): Promise<LoginResponse> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Login failed');
+  }
+
+  return res.json();
+}
+
+// FAKE login (frontend-first / fallback)
 export async function loginFake(
   email: string,
   password: string

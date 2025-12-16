@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { loginFake } from '../auth/authService';
+import { login } from '../auth/authService';
 import { setToken, setUser } from '../auth/authStore';
 import type { AuthUser } from '../auth/authTypes';
 
@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await loginFake(email, password);
+      const res = await login(email, password);
 
       setToken(res.token);
       setUser(res.user as AuthUser);
