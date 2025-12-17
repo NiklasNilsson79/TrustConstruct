@@ -8,6 +8,7 @@ import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import WorkerHomePage from './pages/WorkerHomePage';
 import ManagerHomePage from './pages/ManagerHomePage';
 import WorkerReportsPage from './pages/WorkerReportsPage';
+import ReportDetailPage from './pages/ReportDetailPage';
 
 export default function App() {
   return (
@@ -49,6 +50,8 @@ export default function App() {
           </RequireAuth>
         }
       />
+
+      <Route path="/reports/:reportId" element={<ReportDetailPage />} />
 
       {/* Default route */}
       <Route path="/" element={<Navigate to="/login" replace />} />
