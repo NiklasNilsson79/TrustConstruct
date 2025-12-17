@@ -5,8 +5,8 @@ import { RequireAuth } from './auth/RequireAuth';
 import { RequireRole } from './auth/RequireRole';
 
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
-import { WorkerHomePage } from './pages/WorkerHomePage';
-import { ManagerHomePage } from './pages/ManagerHomePage';
+import WorkerHomePage from './pages/WorkerHomePage';
+import ManagerHomePage from './pages/ManagerHomePage';
 
 export default function App() {
   return (

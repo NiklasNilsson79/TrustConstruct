@@ -5,6 +5,19 @@ type LoginResponse = {
   user: AuthUser;
 };
 
+type BackendUser = {
+  id?: string;
+  _id?: string;
+  email: string;
+  role: UserRole;
+};
+
+function normalizeUser(u: BackendUser): AuthUser {
+  const id = u.id ?? u._id;
+  if (!id) throw new Error('Invalid user payload (missing id/_id).');
+  return { id, email: u.email, role: u.role };
+}
+
 // RIKTIG login (backend)
 export async function login(
   email: string,
@@ -16,11 +29,22 @@ export async function login(
     body: JSON.stringify({ email, password }),
   });
 
-  if (!res.ok) {
-    throw new Error('Login failed');
-  }
+  if (!res.ok) throw new Error('Login failed');
 
-  return res.json();
+  const data = (await res.json()) as { token: string; user: BackendUser };
+  return { token: data.token, user: normalizeUser(data.user) };
+}
+
+// Hämta inloggad användare (backend)
+export async function getMe(token: string): Promise<AuthUser> {
+  const res = await fetch('/api/auth/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) throw new Error('Unauthorized');
+
+  const data = (await res.json()) as BackendUser;
+  return normalizeUser(data);
 }
 
 // FAKE login (frontend-first / fallback)
@@ -28,7 +52,7 @@ export async function loginFake(
   email: string,
   password: string
 ): Promise<LoginResponse> {
-  void password; // avsiktligt oanvänd i fake-login
+  void password;
 
   await new Promise((resolve) => setTimeout(resolve, 500));
 
