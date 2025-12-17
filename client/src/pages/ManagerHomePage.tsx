@@ -21,19 +21,6 @@ export default function ManagerHomePage() {
 
         <section className="grid gap-4">
           <div className="rounded-xl border p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm opacity-80">Inloggad som</p>
-                <p className="mt-1 text-lg font-medium">{me?.email ?? '-'}</p>
-              </div>
-
-              <span className="rounded-full border px-3 py-1 text-xs">
-                {me?.role?.toUpperCase() ?? '—'}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border p-6">
             <h2 className="text-lg font-medium">Managerverktyg</h2>
             <p className="mt-2 text-sm opacity-80">
               Här kommer administration, användarhantering och rapporter.

@@ -7,6 +7,7 @@ import { RequireRole } from './auth/RequireRole';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
 import WorkerHomePage from './pages/WorkerHomePage';
 import ManagerHomePage from './pages/ManagerHomePage';
+import WorkerReportsPage from './pages/WorkerReportsPage';
 
 export default function App() {
   return (
@@ -22,6 +23,17 @@ export default function App() {
           <RequireAuth>
             <RequireRole role="worker">
               <WorkerHomePage />
+            </RequireRole>
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/worker/reports"
+        element={
+          <RequireAuth>
+            <RequireRole role="worker">
+              <WorkerReportsPage />
             </RequireRole>
           </RequireAuth>
         }
