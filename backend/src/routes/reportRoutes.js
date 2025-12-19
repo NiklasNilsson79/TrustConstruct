@@ -3,6 +3,7 @@ const {
   listReports,
   getReportById,
   createReport,
+  listMyReports,
 } = require('../controllers/reportsController');
 
 const router = express.Router();
@@ -12,6 +13,8 @@ router.get('/', listReports);
 
 // POST /api/reports  (NY)
 router.post('/', createReport);
+
+router.get('/mine', listMyReports);
 
 // GET /api/reports/:id
 router.get('/:id', getReportById);

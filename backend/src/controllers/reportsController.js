@@ -95,8 +95,16 @@ function createReport(req, res) {
   return res.status(201).json(newReport);
 }
 
+function listMyReports(req, res) {
+  // Temporary (in-memory): filtrera på contractor === "Worker"
+  // Senare: byt till req.user.id när auth kopplas in.
+  const mine = REPORTS.filter((r) => r.contractor === 'Worker');
+  res.status(200).json(mine);
+}
+
 module.exports = {
   listReports,
   getReportById,
   createReport,
+  listMyReports,
 };

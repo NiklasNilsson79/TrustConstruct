@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -75,6 +75,17 @@ function checklistPillClass(value: ChecklistValue) {
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>();
 
+  // ✅ Hook inside component (Rules of Hooks)
+  const location = useLocation();
+
+  const navState = location.state as
+    | { backTo?: string; backLabel?: string }
+    | null
+    | undefined;
+
+  const backTo = navState?.backTo ?? '/manager';
+  const backLabel = navState?.backLabel ?? 'Back to Reports';
+
   const [report, setReport] = useState<ReportDto | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -133,7 +144,7 @@ export default function ReportDetailPage() {
     };
   }, [reportId]);
 
-  // Mappa backend-status → UI-status (håll det enkelt nu)
+  // Mappa backend-status → UI-status
   const uiStatus: ReportStatus = useMemo(() => {
     const raw = (report?.status ?? 'submitted').toLowerCase();
 
@@ -141,11 +152,10 @@ export default function ReportDetailPage() {
     if (raw === 'rejected') return 'rejected';
     if (raw === 'draft') return 'draft';
 
-    // default
     return 'submitted';
   }, [report?.status]);
 
-  // Summary med stabila fallbacks för att inte ändra layout
+  // Summary (stabila fallbacks)
   const summary: Summary = useMemo(() => {
     const id = report?.id ?? reportId ?? '—';
 
@@ -243,10 +253,10 @@ export default function ReportDetailPage() {
         <div className="mx-auto w-full max-w-5xl px-6 py-8">
           <div className="mb-6">
             <Link
-              to="/manager"
+              to={backTo}
               className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <span aria-hidden>←</span>
-              Back to Reports
+              {backLabel}
             </Link>
           </div>
 
@@ -264,10 +274,10 @@ export default function ReportDetailPage() {
         {/* Back (link style) */}
         <div className="mb-6">
           <Link
-            to="/manager"
+            to={backTo}
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <span aria-hidden>←</span>
-            Back to Reports
+            {backLabel}
           </Link>
         </div>
 
