@@ -52,6 +52,7 @@ export default function WorkerHomePage() {
   const [photoUrl, setPhotoUrl] = React.useState('');
 
   const [submitting, setSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
 
   function setCheck(key: string, value: CheckValue) {
     setChecks((prev) => ({ ...prev, [key]: value }));
@@ -68,11 +69,54 @@ export default function WorkerHomePage() {
     if (!canSubmit) return;
 
     setSubmitting(true);
+    setSubmitError(null);
 
-    // Mock submit (ersätt med API senare)
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      const token = localStorage.getItem('token'); // anpassa om ni lagrar token på annat sätt
 
-    navigate('/worker/reports', { replace: true });
+      const payload = {
+        projectId: projectId.trim(),
+        apartmentId: apartmentId.trim() || undefined,
+        roomId: roomId.trim(),
+        componentId: componentId.trim(),
+        checklist: checks,
+        comments: comments.trim() || undefined,
+        photoUrl: photoUrl.trim() || undefined,
+      };
+
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        // Försök läsa ett tydligt fel från backend (om ni skickar { message })
+        let msg = `Failed to submit report (HTTP ${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.message && typeof data.message === 'string')
+            msg = data.message;
+        } catch {
+          // ignore JSON parse errors
+        }
+        throw new Error(msg);
+      }
+
+      // Om ni vill: const created = await res.json();
+      navigate('/worker/reports', { replace: true });
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Unexpected error while submitting report';
+      setSubmitError(message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -91,6 +135,12 @@ export default function WorkerHomePage() {
         </header>
 
         <form onSubmit={onSubmit} className="grid gap-6">
+          {submitError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {submitError}
+            </div>
+          ) : null}
+
           <Card>
             <CardContent className="p-6 space-y-4">
               <h2 className="text-lg font-medium">Project Information</h2>

@@ -40,7 +40,63 @@ function getReportById(req, res) {
   return res.status(200).json(report);
 }
 
+function createReport(req, res) {
+  const {
+    projectId,
+    apartmentId,
+    roomId,
+    componentId,
+    checklist,
+    comments,
+    photoUrl,
+  } = req.body || {};
+
+  // Minimal validation (kan skärpas senare)
+  if (!projectId || !roomId || !componentId || !checklist) {
+    return res.status(400).json({
+      message:
+        'Missing required fields (projectId, roomId, componentId, checklist)',
+    });
+  }
+
+  // Enkel id-generator för mock (ersätts av DB senare)
+  const id = `RPT-${Math.floor(Math.random() * 900 + 100)}-${Math.random()
+    .toString(36)
+    .slice(2, 6)
+    .toUpperCase()}`;
+
+  const location = `${apartmentId ? apartmentId : 'APT-UNKNOWN'} / ${roomId}`;
+
+  // Om ni har auth senare kan ni byta till req.user.name
+  const contractor = 'Worker';
+
+  const newReport = {
+    id,
+    status: 'submitted',
+    project: projectId,
+    location,
+    contractor,
+    createdAt: new Date().toISOString(),
+
+    inspection: {
+      projectId,
+      apartmentId,
+      roomId,
+      componentId,
+      checklist,
+      comments,
+      photoUrl,
+    },
+  };
+
+  // In-memory insert
+  REPORTS.unshift(newReport);
+
+  return res.status(201).json(newReport);
+}
+
 module.exports = {
   listReports,
   getReportById,
+  createReport,
 };

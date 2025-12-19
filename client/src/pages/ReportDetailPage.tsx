@@ -10,7 +10,11 @@ import {
 } from '../components/Card';
 import { type ReportStatus } from '../components/StatusBadge';
 
-import { getReport, type ReportDto } from '../reports/reportService';
+import {
+  getReport,
+  type ReportDto,
+  type ChecklistValue,
+} from '../reports/reportService';
 
 type SummaryMeta = {
   location: { id: string; detail: string };
@@ -29,7 +33,7 @@ type Summary = {
 type ChecklistItem = {
   title: string;
   description: string;
-  done: boolean;
+  value: ChecklistValue; // OK | NOT_OK | NA
 };
 
 type CommentItem = {
@@ -60,6 +64,12 @@ function chainStatusPillClass(status: ChainVerification['status']) {
   if (status === 'Pending')
     return 'bg-amber-50 text-amber-700 border-amber-200';
   return 'bg-red-50 text-red-700 border-red-200';
+}
+
+function checklistPillClass(value: ChecklistValue) {
+  if (value === 'OK') return 'bg-green-50 text-green-700 border-green-200';
+  if (value === 'NOT_OK') return 'bg-red-50 text-red-700 border-red-200';
+  return 'bg-slate-50 text-slate-700 border-slate-200';
 }
 
 export default function ReportDetailPage() {
@@ -157,49 +167,58 @@ export default function ReportDetailPage() {
     };
   }, [report, reportId, uiStatus]);
 
-  // Mock checklist tills backend kopplas
-  const checklist: ChecklistItem[] = useMemo(
-    () => [
-      {
+  const checklist: ChecklistItem[] = useMemo(() => {
+    const rawChecklist = report?.inspection?.checklist;
+    if (!rawChecklist) return [];
+
+    const LABELS: Record<string, { title: string; description: string }> = {
+      surface_preparation: {
         title: 'Surface Preparation',
         description: 'Verify surfaces are clean and ready for finishing.',
-        done: true,
       },
-      {
+      materials_spec: {
         title: 'Material Compliance',
         description: 'Confirm materials match specification and batch records.',
-        done: true,
       },
-      {
+      per_drawings: {
         title: 'Installation Review',
         description: 'Inspect workmanship and alignment.',
-        done: false,
       },
-      {
+      quality_standards: {
+        title: 'Quality Standards',
+        description: 'Ensure quality standards are met.',
+      },
+      safety_requirements: {
         title: 'Safety Controls',
-        description: 'Confirm temporary safety measures are in place.',
-        done: false,
+        description: 'Confirm safety measures are in place.',
       },
-    ],
-    []
-  );
+      cleanup_completed: {
+        title: 'Clean-up',
+        description: 'Verify clean-up is completed.',
+      },
+    };
 
-  // Mock comments tills backend kopplas
-  const comments: CommentItem[] = useMemo(
-    () => [
+    return Object.entries(rawChecklist).map(([key, value]) => ({
+      title: LABELS[key]?.title ?? key,
+      description: LABELS[key]?.description ?? '',
+      value,
+    }));
+  }, [report]);
+
+  const comments: CommentItem[] = useMemo(() => {
+    const text = report?.inspection?.comments;
+    if (!text) return [];
+
+    return [
       {
-        author: 'Site Manager',
-        timestamp: 'Dec 9, 2025 • 15:45',
-        text: 'Initial review complete. Noted minor alignment issue near the shower edge.',
+        author: report.contractor ?? 'Worker',
+        timestamp: report.createdAt
+          ? new Date(report.createdAt).toLocaleString()
+          : '',
+        text,
       },
-      {
-        author: 'Quality Inspector',
-        timestamp: 'Dec 9, 2025 • 16:10',
-        text: 'Recommend re-checking sealant thickness on the corner joint.',
-      },
-    ],
-    []
-  );
+    ];
+  }, [report]);
 
   // Mock chain verification tills blockchain kopplas
   const chain: ChainVerification = useMemo(
@@ -252,7 +271,7 @@ export default function ReportDetailPage() {
           </Link>
         </div>
 
-        {/* SUMMARY CARD (som Lovable) */}
+        {/* SUMMARY CARD */}
         <Card>
           <CardContent className="pt-6">
             {isLoading ? (
@@ -352,34 +371,38 @@ export default function ReportDetailPage() {
           <CardHeader>
             <CardTitle>Inspection Checklist</CardTitle>
             <CardDescription>
-              Read-only mock checklist until backend wiring is implemented.
+              Inspection checklist submitted by worker.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {checklist.map((item) => (
-                <div
-                  key={item.title}
-                  className="flex items-start justify-between gap-4 rounded-lg border bg-white px-4 py-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="text-sm text-slate-600">
-                      {item.description}
+            {checklist.length === 0 ? (
+              <div className="rounded-lg border bg-white px-4 py-3 text-sm text-muted-foreground">
+                No checklist items were submitted for this report.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {checklist.map((item) => (
+                  <div
+                    key={item.title}
+                    className="flex items-start justify-between gap-4 rounded-lg border bg-white px-4 py-3">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{item.title}</div>
+                      <div className="text-sm text-slate-600">
+                        {item.description}
+                      </div>
                     </div>
-                  </div>
 
-                  <span
-                    className={[
-                      'inline-flex items-center rounded-full border px-3 py-1 text-xs',
-                      item.done
-                        ? 'bg-green-50 text-green-700 border-green-200'
-                        : 'bg-slate-50 text-slate-700 border-slate-200',
-                    ].join(' ')}>
-                    {item.done ? 'Done' : 'Open'}
-                  </span>
-                </div>
-              ))}
-            </div>
+                    <span
+                      className={[
+                        'inline-flex items-center rounded-full border px-3 py-1 text-xs',
+                        checklistPillClass(item.value),
+                      ].join(' ')}>
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -387,24 +410,32 @@ export default function ReportDetailPage() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Comments</CardTitle>
-            <CardDescription>Read-only mock comments.</CardDescription>
+            <CardDescription>
+              Comments provided during inspection.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {comments.map((c, idx) => (
-                <div
-                  key={`${c.author}-${idx}`}
-                  className="rounded-lg border bg-white px-4 py-3">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm font-medium">{c.author}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {c.timestamp}
+            {comments.length === 0 ? (
+              <div className="rounded-lg border bg-white px-4 py-3 text-sm text-muted-foreground">
+                No comments were submitted for this report.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {comments.map((c, idx) => (
+                  <div
+                    key={`${c.author}-${idx}`}
+                    className="rounded-lg border bg-white px-4 py-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-sm font-medium">{c.author}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {c.timestamp}
+                      </div>
                     </div>
+                    <p className="mt-2 text-sm text-slate-700">{c.text}</p>
                   </div>
-                  <p className="mt-2 text-sm text-slate-700">{c.text}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

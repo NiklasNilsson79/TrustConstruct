@@ -1,14 +1,32 @@
 // client/src/reports/reportService.ts
 import { getToken } from '../auth/authStore';
 
+export type ChecklistValue = 'OK' | 'NOT_OK' | 'NA';
+
+export type ReportInspectionDto = {
+  projectId: string;
+  apartmentId?: string;
+  roomId: string;
+  componentId: string;
+  checklist: Record<string, ChecklistValue>;
+  comments?: string;
+  photoUrl?: string;
+};
+
 export type ReportDto = {
   id: string;
   status: string;
   project?: string;
   location?: string;
   contractor?: string;
+
+  // Finns i din nuvarande typ – behåll så länge den ev används i UI
   inspector?: string;
+
   createdAt?: string;
+
+  // NYTT: matchar backend-response
+  inspection?: ReportInspectionDto;
 };
 
 // Small helper so we don't duplicate header logic
