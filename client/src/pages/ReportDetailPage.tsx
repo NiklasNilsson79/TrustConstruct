@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   Card,
@@ -9,6 +10,8 @@ import {
 } from '../components/Card';
 import { type ReportStatus } from '../components/StatusBadge';
 
+import { getReport, type ReportDto } from '../reports/reportService';
+
 type SummaryMeta = {
   location: { id: string; detail: string };
   component: string;
@@ -16,44 +19,225 @@ type SummaryMeta = {
   created: string;
 };
 
+type Summary = {
+  id: string;
+  title: string;
+  status: ReportStatus;
+  meta: SummaryMeta;
+};
+
+type ChecklistItem = {
+  title: string;
+  description: string;
+  done: boolean;
+};
+
+type CommentItem = {
+  author: string;
+  timestamp: string;
+  text: string;
+};
+
+type ChainVerification = {
+  onChainHash: string;
+  status: 'Verified' | 'Pending' | 'Mismatch';
+  lastChecked: string;
+  details: Array<{ label: string; value: string }>;
+};
+
+function statusPillClass(status: ReportStatus) {
+  if (status === 'approved')
+    return 'bg-green-50 text-green-700 border-green-200';
+  if (status === 'submitted')
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'rejected') return 'bg-red-50 text-red-700 border-red-200';
+  return 'bg-slate-50 text-slate-700 border-slate-200';
+}
+
+function chainStatusPillClass(status: ChainVerification['status']) {
+  if (status === 'Verified')
+    return 'bg-green-50 text-green-700 border-green-200';
+  if (status === 'Pending')
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-red-50 text-red-700 border-red-200';
+}
+
 export default function ReportDetailPage() {
-  const { reportId } = useParams();
+  const { reportId } = useParams<{ reportId: string }>();
 
-  // UI-only mock (bygger på Lovable-layouten)
-  const status: ReportStatus = 'submitted';
+  const [report, setReport] = useState<ReportDto | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const summary = {
-    id: reportId ?? 'RPT-006-UVWX',
-    title: 'Inspection Report',
-    status,
-    meta: {
-      location: { id: '2652765', detail: 'AP-2110 / Room 102-3' },
-      component: 'Bathroom',
-      contractor: 'John Worker',
-      created: 'December 9, 2025 at 03:32 PM',
-    } satisfies SummaryMeta,
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const checklist = [
-    { label: 'Surface preparation complete', result: 'Ok' },
-    { label: 'Materials meet specifications', result: 'Ok' },
-    { label: 'Work performed per drawings', result: 'Ok' },
-    { label: 'Quality standards met', result: 'Ok' },
-    { label: 'Safety requirements followed', result: 'Ok' },
-    { label: 'Clean-up completed', result: 'Ok' },
-  ];
+    async function run() {
+      setIsLoading(true);
+      setError(null);
+      setNotFound(false);
 
-  // Blockchain mock (UI-only)
-  const chain = {
-    verified: true,
-    onChainHash:
-      '0x1c8ebfef2c9a4d1e8a7b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9151eba238',
-    blockNumber: '18235567',
-    anchoredBy: '0x742d35cc6634c0532925a3b844bc454e4438f44e',
-    anchoredAt: '09/12/2025, 15:32:21',
-    txHash:
-      '0x80bd236e4b5cd1ca4f2cf5ad5a74f6d19c304d0e433712337054b8c274bfa654',
-  };
+      if (!reportId) {
+        setIsLoading(false);
+        setNotFound(true);
+        return;
+      }
+
+      try {
+        const data = await getReport(reportId);
+
+        if (!isMounted) return;
+
+        if (!data) {
+          setReport(null);
+          setNotFound(true);
+          setIsLoading(false);
+          return;
+        }
+
+        setReport(data);
+        setNotFound(false);
+        setIsLoading(false);
+      } catch (e) {
+        if (!isMounted) return;
+
+        const message = e instanceof Error ? e.message : 'Unknown error';
+
+        if (message === 'REPORT_NOT_FOUND') {
+          setReport(null);
+          setNotFound(true);
+          setIsLoading(false);
+          return;
+        }
+
+        setError(message);
+        setIsLoading(false);
+      }
+    }
+
+    run();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [reportId]);
+
+  // Mappa backend-status → UI-status (håll det enkelt nu)
+  const uiStatus: ReportStatus = useMemo(() => {
+    const raw = (report?.status ?? 'submitted').toLowerCase();
+
+    if (raw === 'approved') return 'approved';
+    if (raw === 'rejected') return 'rejected';
+    if (raw === 'draft') return 'draft';
+
+    // default
+    return 'submitted';
+  }, [report?.status]);
+
+  // Summary med stabila fallbacks för att inte ändra layout
+  const summary: Summary = useMemo(() => {
+    const id = report?.id ?? reportId ?? '—';
+
+    return {
+      id,
+      title: 'Inspection Report',
+      status: uiStatus,
+      meta: {
+        location: {
+          id: report?.location ?? '2652765',
+          detail: 'AP-2110 / Room 102-3',
+        },
+        component: report?.project ?? 'Bathroom',
+        contractor: report?.contractor ?? 'John Worker',
+        created: report?.createdAt
+          ? new Date(report.createdAt).toLocaleString()
+          : 'December 9, 2025 at 03:32 PM',
+      },
+    };
+  }, [report, reportId, uiStatus]);
+
+  // Mock checklist tills backend kopplas
+  const checklist: ChecklistItem[] = useMemo(
+    () => [
+      {
+        title: 'Surface Preparation',
+        description: 'Verify surfaces are clean and ready for finishing.',
+        done: true,
+      },
+      {
+        title: 'Material Compliance',
+        description: 'Confirm materials match specification and batch records.',
+        done: true,
+      },
+      {
+        title: 'Installation Review',
+        description: 'Inspect workmanship and alignment.',
+        done: false,
+      },
+      {
+        title: 'Safety Controls',
+        description: 'Confirm temporary safety measures are in place.',
+        done: false,
+      },
+    ],
+    []
+  );
+
+  // Mock comments tills backend kopplas
+  const comments: CommentItem[] = useMemo(
+    () => [
+      {
+        author: 'Site Manager',
+        timestamp: 'Dec 9, 2025 • 15:45',
+        text: 'Initial review complete. Noted minor alignment issue near the shower edge.',
+      },
+      {
+        author: 'Quality Inspector',
+        timestamp: 'Dec 9, 2025 • 16:10',
+        text: 'Recommend re-checking sealant thickness on the corner joint.',
+      },
+    ],
+    []
+  );
+
+  // Mock chain verification tills blockchain kopplas
+  const chain: ChainVerification = useMemo(
+    () => ({
+      onChainHash:
+        '0x9a5c...e21b (mock) — keep as-is until chain verification is wired',
+      status: 'Pending',
+      lastChecked: 'Dec 9, 2025 • 16:22',
+      details: [
+        { label: 'Network', value: 'Sepolia (mock)' },
+        { label: 'Contract', value: '0x1f3a...9b2c (mock)' },
+        { label: 'Tx', value: '0x7d21...a0ff (mock)' },
+      ],
+    }),
+    []
+  );
+
+  // EARLY RETURN: om rapport saknas eller fel inträffat, visa endast felvy
+  if (!isLoading && (notFound || error) && !report) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="mx-auto w-full max-w-5xl px-6 py-8">
+          <div className="mb-6">
+            <Link
+              to="/manager"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+              <span aria-hidden>←</span>
+              Back to Reports
+            </Link>
+          </div>
+
+          <div className="rounded-lg border bg-background px-4 py-3 text-sm text-foreground">
+            {notFound ? 'Report not found.' : `Could not load report. ${error}`}
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -71,115 +255,127 @@ export default function ReportDetailPage() {
         {/* SUMMARY CARD (som Lovable) */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-6">
-              {/* Header row */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted border">
-                    <svg
-                      width="22"
-                      height="22"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-foreground"
-                      aria-hidden="true">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <path d="M14 2v6h6" />
-                      <path d="M8 13h8" />
-                      <path d="M8 17h8" />
-                    </svg>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">
+                Loading report…
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* Header row */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 border border-slate-200">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-slate-700"
+                        aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6" />
+                        <path d="M8 13h8" />
+                        <path d="M8 17h8" />
+                      </svg>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h1 className="text-2xl font-semibold tracking-tight">
+                        {summary.title}
+                      </h1>
+                      <p className="text-sm text-muted-foreground">
+                        Report ID:{' '}
+                        <span className="font-medium">{summary.id}</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <div className="text-xl font-semibold tracking-tight">
-                      {summary.id}
+                  <span
+                    className={[
+                      'inline-flex items-center rounded-full border px-3 py-1 text-xs',
+                      statusPillClass(summary.status),
+                    ].join(' ')}>
+                    {summary.status}
+                  </span>
+                </div>
+
+                {/* Meta grid */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-lg border bg-white px-4 py-3">
+                    <div className="text-xs text-muted-foreground">
+                      Location
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {summary.title}
+                    <div className="mt-1 text-sm font-medium">
+                      {summary.meta.location.id}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      {summary.meta.location.detail}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-white px-4 py-3">
+                    <div className="text-xs text-muted-foreground">
+                      Component
+                    </div>
+                    <div className="mt-1 text-sm font-medium">
+                      {summary.meta.component}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-white px-4 py-3">
+                    <div className="text-xs text-muted-foreground">
+                      Contractor
+                    </div>
+                    <div className="mt-1 text-sm font-medium">
+                      {summary.meta.contractor}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-white px-4 py-3">
+                    <div className="text-xs text-muted-foreground">Created</div>
+                    <div className="mt-1 text-sm font-medium">
+                      {summary.meta.created}
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <InlineStatusPill status={summary.status} />
-                </div>
               </div>
-
-              {/* Meta row */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                <MetaItem
-                  icon="pin"
-                  label="Location"
-                  primary={summary.meta.location.id}
-                  secondary={summary.meta.location.detail}
-                />
-                <MetaItem
-                  icon="component"
-                  label="Component"
-                  primary={summary.meta.component}
-                />
-                <MetaItem
-                  icon="user"
-                  label="Contractor"
-                  primary={summary.meta.contractor}
-                />
-                <MetaItem
-                  icon="calendar"
-                  label="Created"
-                  primary={summary.meta.created}
-                />
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* CHECKLIST */}
+        {/* CHECKLIST CARD */}
         <Card className="mt-6">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <CircleCheckIcon />
-              <div>
-                <CardTitle className="text-base">
-                  Inspection Checklist
-                </CardTitle>
-                <CardDescription>
-                  Review the checklist items for this report.
-                </CardDescription>
-              </div>
-            </div>
+          <CardHeader>
+            <CardTitle>Inspection Checklist</CardTitle>
+            <CardDescription>
+              Read-only mock checklist until backend wiring is implemented.
+            </CardDescription>
           </CardHeader>
-
           <CardContent>
             <div className="space-y-3">
               {checklist.map((item) => (
                 <div
-                  key={item.label}
-                  className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
-                  <div className="text-sm font-medium text-foreground">
-                    {item.label}
+                  key={item.title}
+                  className="flex items-start justify-between gap-4 rounded-lg border bg-white px-4 py-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">{item.title}</div>
+                    <div className="text-sm text-slate-600">
+                      {item.description}
+                    </div>
                   </div>
 
-                  <span className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1 text-xs border">
-                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border bg-background">
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true">
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                    </span>
-                    {item.result}
+                  <span
+                    className={[
+                      'inline-flex items-center rounded-full border px-3 py-1 text-xs',
+                      item.done
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-slate-50 text-slate-700 border-slate-200',
+                    ].join(' ')}>
+                    {item.done ? 'Done' : 'Open'}
                   </span>
                 </div>
               ))}
@@ -187,337 +383,78 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        {/* COMMENTS */}
+        {/* COMMENTS CARD */}
         <Card className="mt-6">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <CommentIcon />
-              <div>
-                <CardTitle className="text-base">Comments</CardTitle>
-                <CardDescription>
-                  Reviewer notes and discussion.
-                </CardDescription>
-              </div>
-            </div>
+          <CardHeader>
+            <CardTitle>Comments</CardTitle>
+            <CardDescription>Read-only mock comments.</CardDescription>
           </CardHeader>
-
           <CardContent>
-            <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-foreground">
-              Wall 2 cm off from drawings
+            <div className="space-y-4">
+              {comments.map((c, idx) => (
+                <div
+                  key={`${c.author}-${idx}`}
+                  className="rounded-lg border bg-white px-4 py-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm font-medium">{c.author}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.timestamp}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700">{c.text}</p>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* BLOCKCHAIN VERIFICATION (Lovable-like + lighter green) */}
-        <div className="mt-8">
-          <div className="mb-3 text-sm font-semibold text-foreground">
-            Blockchain Verification
-          </div>
+        {/* BLOCKCHAIN VERIFICATION CARD (mock) */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Blockchain Verification</CardTitle>
+            <CardDescription>Mock only. No chain calls yet.</CardDescription>
+          </CardHeader>
 
-          <div className="rounded-xl border border-emerald-600/20 bg-emerald-500/10 p-6">
-            {/* Header */}
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background border border-emerald-600/20">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-emerald-700"
-                  aria-hidden="true">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    On-Chain Hash
+                  </div>
+                  <div className="rounded-md border bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800">
+                    {chain.onChainHash}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Last checked: {chain.lastChecked}
+                  </div>
+                </div>
+
+                <span
+                  className={[
+                    'inline-flex items-center rounded-full border px-3 py-1 text-xs',
+                    chainStatusPillClass(chain.status),
+                  ].join(' ')}>
+                  {chain.status}
+                </span>
               </div>
 
-              <div className="flex-1">
-                <div className="font-semibold text-foreground">
-                  {chain.verified ? 'Blockchain Verified' : 'Not Verified'}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {chain.verified
-                    ? 'This report matches the on-chain reference.'
-                    : 'This report does not match the on-chain reference.'}
-                </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {chain.details.map((d) => (
+                  <div
+                    key={d.label}
+                    className="rounded-lg border bg-white px-4 py-3">
+                    <div className="text-xs text-muted-foreground">
+                      {d.label}
+                    </div>
+                    <div className="mt-1 text-sm font-medium">{d.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Fields */}
-            <div className="mt-5 space-y-4">
-              {/* On-chain hash: input-like monospace + truncation + copy */}
-              <InputLikeHashRow
-                label="On-Chain Hash"
-                value={chain.onChainHash}
-              />
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <SoftField label="Block Number" value={chain.blockNumber} />
-                <SoftField label="Anchored By" value={chain.anchoredBy} />
-                <SoftField label="Anchored At" value={chain.anchoredAt} />
-              </div>
-
-              {/* Transaction hash also input-like */}
-              <InputLikeHashRow label="Transaction Hash" value={chain.txHash} />
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );
-}
-
-/* ---------- Small UI helpers ---------- */
-
-function InlineStatusPill({ status }: { status: ReportStatus }) {
-  const label =
-    status === 'approved'
-      ? 'Verified'
-      : status === 'submitted'
-      ? 'Submitted'
-      : status === 'draft'
-      ? 'Draft'
-      : 'Rejected';
-
-  const isVerified = status === 'approved';
-
-  const classes =
-    status === 'approved'
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700'
-      : status === 'submitted'
-      ? 'border-sky-500/20 bg-sky-500/10 text-sky-700'
-      : status === 'draft'
-      ? 'border-slate-200 bg-slate-50 text-slate-700'
-      : 'border-red-500/20 bg-red-500/10 text-red-700';
-
-  return (
-    <span
-      className={[
-        'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium',
-        classes,
-      ].join(' ')}>
-      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/60 border">
-        {isVerified ? (
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        ) : (
-          <span className="block h-1.5 w-1.5 rounded-full bg-current opacity-60" />
-        )}
-      </span>
-      {label}
-    </span>
-  );
-}
-
-function MetaItem({
-  icon,
-  label,
-  primary,
-  secondary,
-}: {
-  icon: 'pin' | 'component' | 'user' | 'calendar';
-  label: string;
-  primary: string;
-  secondary?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border bg-background px-4 py-3">
-      <div className="mt-0.5 text-muted-foreground">{metaIcon(icon)}</div>
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="mt-1 text-sm font-medium text-foreground truncate">
-          {primary}
-        </div>
-        {secondary ? (
-          <div className="text-xs text-muted-foreground truncate">
-            {secondary}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function SoftField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-emerald-600/15 bg-background/70 px-4 py-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium text-foreground break-all">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function InputLikeHashRow({ label, value }: { label: string; value: string }) {
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      // no-op
-    }
-  };
-
-  return (
-    <div className="rounded-lg border border-emerald-600/15 bg-background/70 px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground">{label}</div>
-
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          aria-label={`Copy ${label}`}
-          title={`Copy ${label}`}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true">
-            <rect x="9" y="9" width="13" height="13" rx="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          Copy
-        </button>
-      </div>
-
-      {/* “Input-like” row */}
-      <div className="mt-2 flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
-        <div className="min-w-0 font-mono text-xs text-foreground truncate">
-          {value}
-        </div>
-        <div className="shrink-0 text-xs text-muted-foreground">hash</div>
-      </div>
-    </div>
-  );
-}
-
-function CircleCheckIcon() {
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-muted border">
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        className="text-foreground">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M16 8l-5 8-3-3" />
-      </svg>
-    </span>
-  );
-}
-
-function CommentIcon() {
-  return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-muted border">
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        className="text-foreground">
-        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-      </svg>
-    </span>
-  );
-}
-
-function metaIcon(kind: 'pin' | 'component' | 'user' | 'calendar') {
-  switch (kind) {
-    case 'pin':
-      return (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true">
-          <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z" />
-          <circle cx="12" cy="10" r="3" />
-        </svg>
-      );
-    case 'component':
-      return (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true">
-          <rect x="4" y="3" width="16" height="18" rx="2" />
-          <path d="M8 7h8" />
-          <path d="M8 11h8" />
-        </svg>
-      );
-    case 'user':
-      return (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true">
-          <path d="M20 21a8 8 0 0 0-16 0" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-      );
-    case 'calendar':
-      return (
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <path d="M16 2v4" />
-          <path d="M8 2v4" />
-          <path d="M3 10h18" />
-        </svg>
-      );
-  }
 }

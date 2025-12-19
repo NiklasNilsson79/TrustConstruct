@@ -1,70 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 
+import { listReports, type ReportDto } from '../reports/reportService';
+
 type ReportStatus = 'Verified' | 'Pending' | 'Mismatch';
 
 type ReportRow = {
-  id: string;
+  id: string; // MUST be the backend id used by /api/reports/:id
   project: string;
   location: string;
   contractor: string;
   date: string; // display string for now
   status: ReportStatus;
 };
-
-const MOCK_REPORTS: ReportRow[] = [
-  {
-    id: 'RPT-006-UVWX',
-    project: 'PROJ-2024-002',
-    location: 'APT-B08 / ROOM-202',
-    contractor: 'David Smith',
-    date: 'Jan 20, 2024',
-    status: 'Pending',
-  },
-  {
-    id: 'RPT-005-QRST',
-    project: 'PROJ-2024-003',
-    location: 'APT-C01 / ROOM-301',
-    contractor: 'James Wilson',
-    date: 'Jan 19, 2024',
-    status: 'Verified',
-  },
-  {
-    id: 'RPT-004-MNOP',
-    project: 'PROJ-2024-001',
-    location: 'APT-A15 / ROOM-103',
-    contractor: 'Michael Johnson',
-    date: 'Jan 18, 2024',
-    status: 'Mismatch',
-  },
-  {
-    id: 'RPT-003-IJKL',
-    project: 'PROJ-2024-002',
-    location: 'APT-B05 / ROOM-201',
-    contractor: 'Robert Chen',
-    date: 'Jan 17, 2024',
-    status: 'Verified',
-  },
-  {
-    id: 'RPT-002-EFGH',
-    project: 'PROJ-2024-001',
-    location: 'APT-A12 / ROOM-102',
-    contractor: 'David Smith',
-    date: 'Jan 16, 2024',
-    status: 'Pending',
-  },
-  {
-    id: 'RPT-001-ABCD',
-    project: 'PROJ-2024-001',
-    location: 'APT-A12 / ROOM-101',
-    contractor: 'Michael Johnson',
-    date: 'Jan 15, 2024',
-    status: 'Verified',
-  },
-];
 
 function statusPillClass(status: ReportStatus) {
   if (status === 'Verified')
@@ -74,16 +25,75 @@ function statusPillClass(status: ReportStatus) {
   return 'bg-red-50 text-red-700 border-red-200';
 }
 
+// Minimal mapping: adjust once backend status semantics are confirmed
+function mapDtoStatusToUi(status?: string): ReportStatus {
+  const s = (status ?? '').toLowerCase();
+  if (s === 'approved' || s === 'verified') return 'Verified';
+  if (s === 'rejected' || s === 'mismatch') return 'Mismatch';
+  return 'Pending';
+}
+
+function mapDtoToRow(dto: ReportDto): ReportRow {
+  return {
+    id: dto.id, // critical: used for /api/reports/:id
+    project: dto.project ?? '—',
+    location: dto.location ?? '—',
+    contractor: dto.contractor ?? '—',
+    date: dto.createdAt
+      ? new Date(dto.createdAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+        })
+      : '—',
+    status: mapDtoStatusToUi(dto.status),
+  };
+}
+
 export default function ManagerHomePage() {
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | ReportStatus>('All');
 
+  const [reports, setReports] = useState<ReportRow[]>([]);
+
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function run() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const dtos = await listReports();
+        if (!isMounted) return;
+
+        setReports(dtos.map(mapDtoToRow));
+        setIsLoading(false);
+      } catch (e) {
+        if (!isMounted) return;
+
+        const msg = e instanceof Error ? e.message : 'Unknown error';
+        setLoadError(msg);
+        setIsLoading(false);
+      }
+    }
+
+    run();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    return MOCK_REPORTS.filter((r) => {
+    return reports.filter((r) => {
       const matchesStatus =
         statusFilter === 'All' ? true : r.status === statusFilter;
 
@@ -97,7 +107,7 @@ export default function ManagerHomePage() {
 
       return matchesStatus && matchesQuery;
     });
-  }, [query, statusFilter]);
+  }, [query, statusFilter, reports]);
 
   const goToReport = (reportId: string) => {
     navigate(`/reports/${encodeURIComponent(reportId)}`);
@@ -225,6 +235,24 @@ export default function ManagerHomePage() {
                   Filters
                 </span>
               </Button>
+            </div>
+
+            {/* Subtle load state */}
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <div>
+                {isLoading ? 'Loading reports…' : ' '}
+                {!isLoading && loadError
+                  ? 'Showing mock data (API unavailable).'
+                  : null}
+              </div>
+              {!isLoading && loadError ? (
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  onClick={() => window.location.reload()}>
+                  Retry
+                </button>
+              ) : null}
             </div>
           </CardContent>
         </Card>
