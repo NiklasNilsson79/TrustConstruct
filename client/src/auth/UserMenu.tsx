@@ -6,7 +6,6 @@ import type { AuthUser } from './authTypes';
 function toDisplayName(user: AuthUser | null) {
   if (!user?.email) return 'Unknown user';
   const local = user.email.split('@')[0] || user.email;
-  // "john.worker" -> "John Worker"
   return local
     .replace(/[._-]+/g, ' ')
     .split(' ')
@@ -30,8 +29,8 @@ export function UserMenu() {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      {/* Avatar */}
+    <div className="flex items-center gap-4">
+      {/* Briefcase icon  */}
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 border border-slate-200">
         <svg
           width="18"
@@ -44,17 +43,20 @@ export function UserMenu() {
           strokeLinejoin="round"
           className="text-slate-600"
           aria-hidden="true">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
+          <path d="M10 6h4" />
+          <path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1" />
+          <path d="M4 7h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
+          <path d="M2 12v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-7" />
         </svg>
       </div>
 
-      {/* Name + role */}
+      {/* Name + role  “John Worker” + “Worker” */}
       <div className="leading-tight">
         <div className="text-sm font-medium text-slate-900">{displayName}</div>
-        <div className="text-xs text-slate-500">{user?.email ?? ''}</div>
+        <div className="text-xs text-slate-500">{roleLabel}</div>
       </div>
 
+      {/* Role pill */}
       {roleLabel && (
         <span className="rounded-full bg-sky-50 text-sky-700 border border-sky-100 px-3 py-1 text-xs">
           {roleLabel}
@@ -65,7 +67,7 @@ export function UserMenu() {
       <button
         type="button"
         onClick={onLogout}
-        className="ml-2 inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors">
+        className="ml-1 inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors">
         <svg
           width="16"
           height="16"

@@ -1,6 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-
-import { LogoutButton } from '../auth/LogoutButton';
 import { Card, CardContent } from '../components/Card';
 import { Button } from '../components/Button';
 
@@ -100,8 +98,6 @@ export default function WorkerReportsPage() {
                 New Report
               </span>
             </Button>
-
-            <LogoutButton />
           </div>
         </header>
 

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-
-import { LogoutButton } from '../auth/LogoutButton';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -76,6 +75,8 @@ function statusPillClass(status: ReportStatus) {
 }
 
 export default function ManagerHomePage() {
+  const navigate = useNavigate();
+
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | ReportStatus>('All');
 
@@ -97,6 +98,10 @@ export default function ManagerHomePage() {
       return matchesStatus && matchesQuery;
     });
   }, [query, statusFilter]);
+
+  const goToReport = (reportId: string) => {
+    navigate(`/reports/${encodeURIComponent(reportId)}`);
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -131,11 +136,6 @@ export default function ManagerHomePage() {
                 Search and verify construction quality control reports.
               </p>
             </div>
-          </div>
-
-          {/* User header (avatar + name + role + logout) */}
-          <div className="sm:pt-1">
-            <LogoutButton />
           </div>
         </header>
 
@@ -208,7 +208,6 @@ export default function ManagerHomePage() {
                 className="w-full md:w-auto"
                 onClick={() => {
                   // placeholder för framtida filter-panel
-                  // här kan ni öppna modal eller drawer senare
                 }}>
                 <span className="inline-flex items-center gap-2">
                   <svg
@@ -248,8 +247,27 @@ export default function ManagerHomePage() {
 
                 <tbody>
                   {filtered.map((r) => (
-                    <tr key={r.id} className="border-t hover:bg-slate-50/50">
-                      <td className="px-6 py-4 font-medium">{r.id}</td>
+                    <tr
+                      key={r.id}
+                      className="border-t hover:bg-slate-50/50 cursor-pointer"
+                      onClick={() => goToReport(r.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          goToReport(r.id);
+                        }
+                      }}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Open report ${r.id}`}>
+                      <td className="px-6 py-4 font-medium">
+                        <Link
+                          to={`/reports/${encodeURIComponent(r.id)}`}
+                          className="rounded-sm underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-slate-200"
+                          onClick={(e) => e.stopPropagation()}>
+                          {r.id}
+                        </Link>
+                      </td>
                       <td className="px-6 py-4">{r.project}</td>
                       <td className="px-6 py-4 text-slate-600">{r.location}</td>
                       <td className="px-6 py-4">{r.contractor}</td>

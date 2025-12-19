@@ -10,6 +10,8 @@ import ManagerHomePage from './pages/ManagerHomePage';
 import WorkerReportsPage from './pages/WorkerReportsPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 
+import ProtectedLayout from './components/layout/ProtectedLayout';
+
 export default function App() {
   return (
     <Routes>
@@ -17,46 +19,48 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-      {/* Protected */}
+      {/* Protected layout */}
       <Route
-        path="/worker"
         element={
           <RequireAuth>
+            <ProtectedLayout />
+          </RequireAuth>
+        }>
+        {/* Worker */}
+        <Route
+          path="/worker"
+          element={
             <RequireRole role="worker">
               <WorkerHomePage />
             </RequireRole>
-          </RequireAuth>
-        }
-      />
+          }
+        />
 
-      <Route
-        path="/worker/reports"
-        element={
-          <RequireAuth>
+        <Route
+          path="/worker/reports"
+          element={
             <RequireRole role="worker">
               <WorkerReportsPage />
             </RequireRole>
-          </RequireAuth>
-        }
-      />
+          }
+        />
 
-      <Route
-        path="/manager"
-        element={
-          <RequireAuth>
+        {/* Manager */}
+        <Route
+          path="/manager"
+          element={
             <RequireRole role="manager">
               <ManagerHomePage />
             </RequireRole>
-          </RequireAuth>
-        }
-      />
+          }
+        />
 
-      <Route path="/reports/:reportId" element={<ReportDetailPage />} />
+        {/* Shared */}
+        <Route path="/reports/:reportId" element={<ReportDetailPage />} />
+      </Route>
 
-      {/* Default route */}
+      {/* Default */}
       <Route path="/" element={<Navigate to="/login" replace />} />
-
-      {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

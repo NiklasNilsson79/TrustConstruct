@@ -1,7 +1,5 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { LogoutButton } from '../auth/LogoutButton';
 import { Card, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -90,8 +88,6 @@ export default function WorkerHomePage() {
               report.
             </p>
           </div>
-
-          <LogoutButton />
         </header>
 
         <form onSubmit={onSubmit} className="grid gap-6">

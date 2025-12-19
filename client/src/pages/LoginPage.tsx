@@ -1,3 +1,5 @@
+import AppLogo from '../components/brand/AppLogo';
+
 import * as React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -49,16 +51,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Top brand row */}
-      <div className="container py-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
-            <div
-              className="h-4 w-4 rounded-sm bg-primary/70"
-              aria-hidden="true"
-            />
-          </div>
-          <span className="text-sm font-semibold">TrustConstruct</span>
-        </div>
+      <div className="flex justify-start px-6 pt-10">
+        <AppLogo />
       </div>
 
       {/* Centered auth card */}
