@@ -1,22 +1,20 @@
 const express = require('express');
-const {
-  listReports,
-  getReportById,
-  createReport,
-  listMyReports,
-} = require('../controllers/reportsController');
-
 const router = express.Router();
 
-// GET /api/reports
+const { calculateReportHash } = require('../controllers/hashController');
+const {
+  listReports,
+  listMyReports,
+  getReportById,
+  createReport,
+} = require('../controllers/reportsController');
+
 router.get('/', listReports);
-
-// POST /api/reports  (NY)
-router.post('/', createReport);
-
 router.get('/mine', listMyReports);
 
-// GET /api/reports/:id
+router.post('/hash', calculateReportHash);
+
 router.get('/:id', getReportById);
+router.post('/', createReport);
 
 module.exports = router;
