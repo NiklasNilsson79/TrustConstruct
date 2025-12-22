@@ -1,18 +1,25 @@
 const express = require('express');
+const cors = require('cors');
+
+// Routes
 const authRoutes = require('./routes/authRoutes');
-const reportsRoutes = require('./routes/reportRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const chainRoutes = require('./routes/chainRoutes');
 
 const app = express();
 
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
+// Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/chain', chainRoutes);
 
-// NEW: Reports API
-app.use('/api/reports', reportsRoutes);
+// Health check (valfritt men bra)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 module.exports = app;
