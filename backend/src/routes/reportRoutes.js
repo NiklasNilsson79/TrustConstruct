@@ -9,12 +9,17 @@ const {
   createReport,
 } = require('../controllers/reportsController');
 
+// List routes (must be BEFORE "/:reportId")
 router.get('/', listReports);
 router.get('/mine', listMyReports);
 
+// Utility route (must be BEFORE "/:reportId")
 router.post('/hash', calculateReportHash);
 
-router.get('/:id', getReportById);
+// Create report
 router.post('/', createReport);
+
+// Get by id (must be LAST so it doesn't catch /mine or /hash etc)
+router.get('/:reportId', getReportById);
 
 module.exports = router;
