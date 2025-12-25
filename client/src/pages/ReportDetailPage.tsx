@@ -1,5 +1,6 @@
 import { Link, useParams, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
+import BlockchainVerificationCard from '../components/report/BlockchainVerificationCard';
 
 import {
   Card,
@@ -42,13 +43,6 @@ type CommentItem = {
   text: string;
 };
 
-type ChainVerification = {
-  onChainHash: string;
-  status: 'Verified' | 'Pending' | 'Mismatch';
-  lastChecked: string;
-  details: Array<{ label: string; value: string }>;
-};
-
 function statusPillClass(status: ReportStatus) {
   if (status === 'approved')
     return 'bg-green-50 text-green-700 border-green-200';
@@ -56,14 +50,6 @@ function statusPillClass(status: ReportStatus) {
     return 'bg-amber-50 text-amber-700 border-amber-200';
   if (status === 'rejected') return 'bg-red-50 text-red-700 border-red-200';
   return 'bg-slate-50 text-slate-700 border-slate-200';
-}
-
-function chainStatusPillClass(status: ChainVerification['status']) {
-  if (status === 'Verified')
-    return 'bg-green-50 text-green-700 border-green-200';
-  if (status === 'Pending')
-    return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-red-50 text-red-700 border-red-200';
 }
 
 function checklistPillClass(value: ChecklistValue) {
@@ -229,22 +215,6 @@ export default function ReportDetailPage() {
       },
     ];
   }, [report]);
-
-  // Mock chain verification tills blockchain kopplas
-  const chain: ChainVerification = useMemo(
-    () => ({
-      onChainHash:
-        '0x9a5c...e21b (mock) — keep as-is until chain verification is wired',
-      status: 'Pending',
-      lastChecked: 'Dec 9, 2025 • 16:22',
-      details: [
-        { label: 'Network', value: 'Sepolia (mock)' },
-        { label: 'Contract', value: '0x1f3a...9b2c (mock)' },
-        { label: 'Tx', value: '0x7d21...a0ff (mock)' },
-      ],
-    }),
-    []
-  );
 
   // EARLY RETURN: om rapport saknas eller fel inträffat, visa endast felvy
   if (!isLoading && (notFound || error) && !report) {
@@ -449,52 +419,8 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        {/* BLOCKCHAIN VERIFICATION CARD (mock) */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Blockchain Verification</CardTitle>
-            <CardDescription>Mock only. No chain calls yet.</CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground">
-                    On-Chain Hash
-                  </div>
-                  <div className="rounded-md border bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800">
-                    {chain.onChainHash}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Last checked: {chain.lastChecked}
-                  </div>
-                </div>
-
-                <span
-                  className={[
-                    'inline-flex items-center rounded-full border px-3 py-1 text-xs',
-                    chainStatusPillClass(chain.status),
-                  ].join(' ')}>
-                  {chain.status}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {chain.details.map((d) => (
-                  <div
-                    key={d.label}
-                    className="rounded-lg border bg-white px-4 py-3">
-                    <div className="text-xs text-muted-foreground">
-                      {d.label}
-                    </div>
-                    <div className="mt-1 text-sm font-medium">{d.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* BLOCKCHAIN VERIFICATION CARD (LIVE) */}
+        <BlockchainVerificationCard report={report} />
       </div>
     </main>
   );
