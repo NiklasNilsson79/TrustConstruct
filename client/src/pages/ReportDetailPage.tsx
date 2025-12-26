@@ -1,6 +1,7 @@
 import { Link, useParams, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import BlockchainVerificationCard from '../components/report/BlockchainVerificationCard';
+import { approveReportOnChain } from '../utils/approveReportOnChain';
 
 import {
   Card,
@@ -13,6 +14,7 @@ import { type ReportStatus } from '../components/StatusBadge';
 
 import {
   getReport,
+  updateReportStatus,
   type ReportDto,
   type ChecklistValue,
 } from '../reports/reportService';
@@ -58,10 +60,24 @@ function checklistPillClass(value: ChecklistValue) {
   return 'bg-slate-50 text-slate-700 border-slate-200';
 }
 
+async function patchOnChain(reportId: string, body: any) {
+  const res = await fetch(`/api/reports/${reportId}/onchain`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || `PATCH /api/reports/${reportId}/onchain failed`);
+  }
+
+  return res.json();
+}
+
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>();
 
-  // ✅ Hook inside component (Rules of Hooks)
   const location = useLocation();
 
   const navState = location.state as
@@ -71,11 +87,14 @@ export default function ReportDetailPage() {
 
   const backTo = navState?.backTo ?? '/manager';
   const backLabel = navState?.backLabel ?? 'Back to Reports';
+  const isManagerContext = backTo.startsWith('/manager');
 
   const [report, setReport] = useState<ReportDto | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,7 +149,69 @@ export default function ReportDetailPage() {
     };
   }, [reportId]);
 
-  // Mappa backend-status → UI-status
+  async function onApprove() {
+    if (!report?.id) return;
+
+    const hash = (report as ReportDto & { reportHash?: string }).reportHash;
+
+    if (!hash) {
+      setApproveError(
+        'Missing reportHash on report. Cannot register on-chain.'
+      );
+      return;
+    }
+
+    setIsApproving(true);
+    setApproveError(null);
+
+    const id = report.id;
+
+    try {
+      // 1) On-chain (triggers OKX)
+      // approveReportOnChain adds 0x-prefix + validates bytes32 length internally.
+      // If contract reverts (AlreadyRegistered, etc.) we catch and show.
+      const { txHash, blockNumber } = await approveReportOnChain(hash);
+
+      // 2) Persist on-chain result to backend
+      // Mark as confirmed + store tx metadata
+      const patched = await patchOnChain(id, {
+        txHash,
+        blockNumber,
+        status: 'confirmed',
+        chainError: '',
+      });
+
+      // Keep UI in sync with DB immediately
+      setReport(patched);
+
+      // 3) Update business/status (approved)
+      const updated = await updateReportStatus(id, 'approved');
+      setReport(updated);
+
+      // Optional: refetch for full consistency
+      // const fresh = await getReport(id);
+      // setReport(fresh);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'Failed to approve/register report';
+
+      // Best effort: store failure state in backend (do not block UI if this fails)
+      try {
+        await patchOnChain(id, {
+          status: 'failed',
+          chainError: msg,
+        });
+      } catch {
+        // ignore secondary failure; the main error is still shown
+      }
+
+      setApproveError(msg);
+    } finally {
+      setIsApproving(false);
+    }
+  }
+
+  // Map backend status → UI status
   const uiStatus: ReportStatus = useMemo(() => {
     const raw = (report?.status ?? 'submitted').toLowerCase();
 
@@ -138,10 +219,10 @@ export default function ReportDetailPage() {
     if (raw === 'rejected') return 'rejected';
     if (raw === 'draft') return 'draft';
 
+    // Treat anything else (pending/submitted/etc.) as "submitted" in UI
     return 'submitted';
   }, [report?.status]);
 
-  // Summary (stabila fallbacks)
   const summary: Summary = useMemo(() => {
     const id = report?.id ?? reportId ?? '—';
 
@@ -216,7 +297,6 @@ export default function ReportDetailPage() {
     ];
   }, [report]);
 
-  // EARLY RETURN: om rapport saknas eller fel inträffat, visa endast felvy
   if (!isLoading && (notFound || error) && !report) {
     return (
       <main className="min-h-screen bg-background">
@@ -241,7 +321,6 @@ export default function ReportDetailPage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto w-full max-w-5xl px-6 py-8">
-        {/* Back (link style) */}
         <div className="mb-6">
           <Link
             to={backTo}
@@ -251,7 +330,6 @@ export default function ReportDetailPage() {
           </Link>
         </div>
 
-        {/* SUMMARY CARD */}
         <Card>
           <CardContent className="pt-6">
             {isLoading ? (
@@ -260,7 +338,12 @@ export default function ReportDetailPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-6">
-                {/* Header row */}
+                {approveError && (
+                  <div className="rounded-lg border bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {approveError}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-start gap-4">
                     <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 border border-slate-200">
@@ -293,16 +376,31 @@ export default function ReportDetailPage() {
                     </div>
                   </div>
 
-                  <span
-                    className={[
-                      'inline-flex items-center rounded-full border px-3 py-1 text-xs',
-                      statusPillClass(summary.status),
-                    ].join(' ')}>
-                    {summary.status}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={[
+                        'inline-flex items-center rounded-full border px-3 py-1 text-xs',
+                        statusPillClass(summary.status),
+                      ].join(' ')}>
+                      {summary.status}
+                    </span>
+
+                    {isManagerContext && summary.status === 'submitted' && (
+                      <button
+                        type="button"
+                        onClick={onApprove}
+                        disabled={isApproving || isLoading}
+                        className={[
+                          'inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium',
+                          'bg-white hover:bg-slate-50',
+                          'disabled:opacity-50 disabled:cursor-not-allowed',
+                        ].join(' ')}>
+                        {isApproving ? 'Approving…' : 'Approve'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Meta grid */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="rounded-lg border bg-white px-4 py-3">
                     <div className="text-xs text-muted-foreground">
@@ -346,7 +444,6 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        {/* CHECKLIST CARD */}
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Inspection Checklist</CardTitle>
@@ -386,7 +483,6 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        {/* COMMENTS CARD */}
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Comments</CardTitle>
@@ -419,7 +515,6 @@ export default function ReportDetailPage() {
           </CardContent>
         </Card>
 
-        {/* BLOCKCHAIN VERIFICATION CARD (LIVE) */}
         <BlockchainVerificationCard report={report} />
       </div>
     </main>

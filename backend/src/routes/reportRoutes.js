@@ -7,6 +7,7 @@ const {
   listMyReports,
   getReportById,
   createReport,
+  updateReportOnChain,
 } = require('../controllers/reportsController');
 
 // List routes (must be BEFORE "/:reportId")
@@ -19,7 +20,10 @@ router.post('/hash', calculateReportHash);
 // Create report
 router.post('/', createReport);
 
-// Get by id (must be LAST so it doesn't catch /mine or /hash etc)
+// Save on-chain result (Manager Approve will call this after wallet tx)
+router.patch('/:reportId/onchain', updateReportOnChain);
+
+// Get by id (keep last-ish)
 router.get('/:reportId', getReportById);
 
 module.exports = router;

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
+import { BrowserProvider, Contract } from 'ethers';
+import type { InterfaceAbi } from 'ethers';
+
+import reportRegistryArtifact from '../artifacts/ReportRegistry.json';
 
 type CheckValue = 'OK' | 'NOT_OK' | 'NA';
 
@@ -65,6 +69,7 @@ export default function WorkerHomePage() {
     !submitting;
 
   async function onSubmit(e: React.FormEvent) {
+    console.log('[submit] onSubmit triggered');
     e.preventDefault();
     if (!canSubmit) return;
 
@@ -84,6 +89,8 @@ export default function WorkerHomePage() {
         photoUrl: photoUrl.trim() || undefined,
       };
 
+      console.log('[submit] about to POST /api/reports');
+
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: {
@@ -93,11 +100,15 @@ export default function WorkerHomePage() {
         body: JSON.stringify(payload),
       });
 
+      console.log('[submit] got response:', res.status);
+
       if (!res.ok) {
         // Försök läsa ett tydligt fel från backend (om ni skickar { message })
         let msg = `Failed to submit report (HTTP ${res.status})`;
         try {
           const data = await res.json();
+          console.log('[submit] response data:', data);
+
           if (data?.message && typeof data.message === 'string')
             msg = data.message;
         } catch {
@@ -105,6 +116,71 @@ export default function WorkerHomePage() {
         }
         throw new Error(msg);
       }
+
+      const created = await res.json();
+
+      const registryAddress = import.meta.env.VITE_REPORT_REGISTRY_ADDRESS;
+
+      if (!registryAddress) {
+        throw new Error('Missing VITE_REPORT_REGISTRY_ADDRESS in client env');
+      }
+
+      const abi = reportRegistryArtifact.abi as unknown as InterfaceAbi;
+
+      const rawHash = created?.reportHash;
+      if (!rawHash || typeof rawHash !== 'string') {
+        throw new Error('Backend did not return reportHash');
+      }
+
+      const reportHash0x = rawHash.startsWith('0x') ? rawHash : `0x${rawHash}`;
+
+      if (!window.ethereum) {
+        throw new Error('No injected wallet found (OKX).');
+      }
+
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // ethers v6 Contract expects InterfaceAbi; we safely cast the unknown ABI
+      const registry = new Contract(registryAddress, abi, signer);
+
+      console.log('[submit] registering reportHash on-chain:', reportHash0x);
+
+      const tx = await registry.registerReport(reportHash0x);
+      console.log('[submit] on-chain tx:', tx.hash);
+
+      await tx.wait();
+
+      // After on-chain confirmed, persist tx info back to backend
+      const patchRes = await fetch(
+        `/api/reports/${encodeURIComponent(created._id)}/onchain`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            txHash: tx.hash,
+            status: 'confirmed',
+            chainError: '',
+          }),
+        }
+      );
+
+      if (!patchRes.ok) {
+        const text = await patchRes.text().catch(() => '');
+        throw new Error(
+          `Failed to persist on-chain status (${patchRes.status}): ${text}`
+        );
+      }
+
+      const updated = await patchRes.json();
+      console.log('[submit] updated after onchain patch:', updated);
+
+      console.log('[submit] on-chain confirmed');
+
+      console.log('[submit] final:', updated);
 
       // Om ni vill: const created = await res.json();
       navigate('/worker/reports', { replace: true });

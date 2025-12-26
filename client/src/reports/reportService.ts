@@ -109,3 +109,27 @@ export async function getReportById(reportId: string): Promise<ReportDto> {
 
   return res.json();
 }
+
+export async function updateReportStatus(reportId: string, status: string) {
+  const res = await fetch(
+    `/api/reports/${encodeURIComponent(reportId)}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }
+  );
+
+  if (!res.ok) {
+    let msg = `Failed to update status (HTTP ${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.message) msg = data.message;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
+  }
+
+  return (await res.json()) as ReportDto;
+}

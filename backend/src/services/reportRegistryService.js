@@ -1,5 +1,11 @@
 import { ethers } from 'ethers';
 
+/**
+ * Minimal ABI for ReportRegistry
+ * - registerReport(bytes32)
+ * - isRegistered(bytes32) -> bool
+ * - getRecord(bytes32) -> (submitter, timestamp, exists)
+ */
 const ABI = [
   'function registerReport(bytes32 reportHash)',
   'function isRegistered(bytes32 reportHash) view returns (bool)',
@@ -12,10 +18,28 @@ function requireEnv(name) {
   return v;
 }
 
-export function getReportRegistryClient() {
+/**
+ * Read-only client: provider + contract connected to provider
+ * Does NOT require CHAIN_PRIVATE_KEY.
+ */
+export function getReportRegistryReadClient() {
   const rpcUrl = requireEnv('CHAIN_RPC_URL');
-  const pk = requireEnv('CHAIN_PRIVATE_KEY');
   const address = requireEnv('REPORT_REGISTRY_ADDRESS');
+
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const contract = new ethers.Contract(address, ABI, provider);
+
+  return { provider, contract };
+}
+
+/**
+ * Write client: provider + wallet + contract connected to wallet
+ * Requires CHAIN_PRIVATE_KEY.
+ */
+export function getReportRegistryWriteClient() {
+  const rpcUrl = requireEnv('CHAIN_RPC_URL');
+  const address = requireEnv('REPORT_REGISTRY_ADDRESS');
+  const pk = requireEnv('CHAIN_PRIVATE_KEY');
 
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet = new ethers.Wallet(pk, provider);
@@ -24,10 +48,19 @@ export function getReportRegistryClient() {
   return { provider, wallet, contract };
 }
 
-export async function registerReportOnChain(reportHash) {
-  const { contract } = getReportRegistryClient();
+/**
+ * Backwards compatibility:
+ * If other code imports getReportRegistryClient(), make it a read client by default
+ * (so verify never needs a private key).
+ */
+export function getReportRegistryClient() {
+  return getReportRegistryReadClient();
+}
 
-  // reportHash måste vara "0x" + 64 hex
+export async function registerReportOnChain(reportHash) {
+  // Write requires CHAIN_PRIVATE_KEY
+  const { contract } = getReportRegistryWriteClient();
+
   const tx = await contract.registerReport(reportHash);
   const receipt = await tx.wait();
 
@@ -38,7 +71,8 @@ export async function registerReportOnChain(reportHash) {
 }
 
 export async function verifyReportOnChain(reportHash) {
-  const { contract } = getReportRegistryClient();
+  // Read-only (no private key)
+  const { contract } = getReportRegistryReadClient();
 
   const isRegistered = await contract.isRegistered(reportHash);
   if (!isRegistered) return { isRegistered: false };
