@@ -115,7 +115,7 @@ async function createReport(req, res) {
     const project =
       providedProject || inspection.projectId || 'UNKNOWN_PROJECT';
     const location = providedLocation || 'UNKNOWN_LOCATION';
-    const contractor = providedContractor || 'UNKNOWN_CONTRACTOR';
+    const contractor = providedContractor || 'Worker';
 
     // --- 4) Determine status from checklist content ---
     const hasIssues = hasIssuesFromChecklist(inspection?.checklist);
