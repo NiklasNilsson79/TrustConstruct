@@ -1,3 +1,5 @@
+import DeployRegistryPage from './pages/DeployRegistryPage';
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 
@@ -54,6 +56,8 @@ export default function App() {
             </RequireRole>
           }
         />
+
+        <Route path="/deploy" element={<DeployRegistryPage />} />
 
         {/* Shared */}
         <Route path="/reports/:reportId" element={<ReportDetailPage />} />
