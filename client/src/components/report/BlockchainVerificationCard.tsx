@@ -46,6 +46,31 @@ async function getJson<T>(url: string): Promise<T> {
   return res.json();
 }
 
+function normalizeHexHash(hash: string): string {
+  const h = hash.trim();
+  return h.startsWith('0x') ? h : `0x${h}`;
+}
+
+/**
+ * Fetch only metadata. Never decides Verified/Pending here.
+ * Returns null if endpoint is unavailable or doesn't return ok=true.
+ */
+async function fetchVerifyMeta(
+  hash: string
+): Promise<{ submitter?: string; timestamp?: number } | null> {
+  try {
+    const normalized = normalizeHexHash(hash);
+    const data = await getJson<ChainVerifyResponse>(
+      `/api/chain/verify/${encodeURIComponent(normalized)}`
+    );
+
+    if (!data?.ok) return null;
+    return { submitter: data.submitter, timestamp: data.timestamp };
+  } catch {
+    return null;
+  }
+}
+
 function networkLabelFromReport(report: ReportDto | null): string {
   const chainId = report?.onChain?.chainId;
   const network = report?.onChain?.network;
@@ -86,7 +111,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
         return;
       }
 
-      // Prefer server-provided reportHash if it exists (it SHOULD, per your console log)
+      // Prefer server-provided reportHash if it exists
       const hash = report.reportHash ?? null;
       setReportHash(hash);
 
@@ -94,11 +119,20 @@ export default function BlockchainVerificationCard({ report }: Props) {
       const oc = report.onChain;
       if (oc?.registered === true && oc.status === 'confirmed') {
         setStatus('Verified');
-        setSubmitter(oc.submitter ?? null);
-
-        // If backend later adds timestamp to onChain, you can set it here.
-        // For now we keep it blank unless verify gives it.
         setLastChecked(new Date());
+
+        // If backend already persists submitter/verifiedAt later, we can use them.
+        if (oc.submitter) setSubmitter(oc.submitter);
+
+        // Fetch metadata (submitter + timestamp) from verify endpoint if possible
+        if (hash) {
+          const meta = await fetchVerifyMeta(hash);
+          if (!cancelled && meta) {
+            setSubmitter(meta.submitter ?? oc.submitter ?? null);
+            setTimestamp(meta.timestamp ?? null);
+          }
+        }
+
         return;
       }
 
@@ -112,9 +146,11 @@ export default function BlockchainVerificationCard({ report }: Props) {
       setIsLoading(true);
 
       try {
+        const normalized = normalizeHexHash(hash);
         const verify = await getJson<ChainVerifyResponse>(
-          `/api/chain/verify/${hash}`
+          `/api/chain/verify/${encodeURIComponent(normalized)}`
         );
+
         if (cancelled) return;
 
         setLastChecked(new Date());
