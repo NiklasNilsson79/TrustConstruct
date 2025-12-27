@@ -47,6 +47,11 @@ async function createReport(req, res) {
     const body = req.body || {};
     const authUser = getAuthUser(req);
 
+    // NEW: enforce auth (routes are now protected, but keep controller defensive)
+    if (!authUser) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     // --- 1) Support BOTH payload shapes (legacy root fields + nested inspection) ---
 
     // Legacy (WorkerHomePage today)
@@ -125,7 +130,10 @@ async function createReport(req, res) {
       typeof authUser?.name === 'string' ? authUser.name.trim() : '';
     const contractorCompany =
       typeof authUser?.company === 'string' ? authUser.company.trim() : '';
+
+    // IMPORTANT: prefer userId from middleware; keep fallbacks for older token shapes
     const contractorUserId =
+      (typeof authUser?.userId === 'string' && authUser.userId.trim()) ||
       (typeof authUser?.sub === 'string' && authUser.sub.trim()) ||
       (typeof authUser?.id === 'string' && authUser.id.trim()) ||
       '';
@@ -162,7 +170,7 @@ async function createReport(req, res) {
       location,
       contractor,
 
-      // NEW signer fields (Step 2)
+      // NEW signer fields
       contractorName,
       contractorCompany,
       contractorUserId,
@@ -228,11 +236,28 @@ async function createReport(req, res) {
   }
 }
 
-async function listMyReports(_req, res) {
+async function listMyReports(req, res) {
   try {
-    // NOTE: This is currently hard-coded in your repo.
-    // Replace with req.user/req.auth when your auth wiring is ready.
-    const mine = await listReportsByContractor('Worker');
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const name = typeof authUser.name === 'string' ? authUser.name.trim() : '';
+    const company =
+      typeof authUser.company === 'string' ? authUser.company.trim() : '';
+
+    // Must match how createReport composes `contractor`
+    const contractorKey =
+      name && company ? `${name} — ${company}` : name || company || '';
+
+    if (!contractorKey) {
+      return res
+        .status(400)
+        .json({ message: 'Missing user identity (name/company)' });
+    }
+
+    const mine = await listReportsByContractor(contractorKey);
     return res.status(200).json(mine);
   } catch (err) {
     console.error('[reportsController] listMyReports failed', err);
@@ -266,47 +291,24 @@ async function updateReportOnChain(req, res) {
         patch['onChain.txHash'] = body.onChain.txHash;
       if (typeof body.onChain.blockNumber === 'number')
         patch['onChain.blockNumber'] = body.onChain.blockNumber;
+      if (typeof body.onChain.submittedAt === 'string')
+        patch['onChain.submittedAt'] = body.onChain.submittedAt;
+      if (typeof body.onChain.confirmedAt === 'string')
+        patch['onChain.confirmedAt'] = body.onChain.confirmedAt;
       if (typeof body.onChain.network === 'string')
         patch['onChain.network'] = body.onChain.network;
       if (typeof body.onChain.chainId === 'number')
         patch['onChain.chainId'] = body.onChain.chainId;
       if (typeof body.onChain.registryAddress === 'string')
         patch['onChain.registryAddress'] = body.onChain.registryAddress;
-
-      // timestamps (optional)
-      if (body.onChain.submittedAt)
-        patch['onChain.submittedAt'] = body.onChain.submittedAt;
-      if (body.onChain.confirmedAt)
-        patch['onChain.confirmedAt'] = body.onChain.confirmedAt;
-      if (typeof body.onChain.error === 'string')
-        patch['onChain.error'] = body.onChain.error;
     } else {
-      // Legacy: flatten mapping
+      // Legacy: top-level fields
       if (typeof body.txHash === 'string')
         patch['onChain.txHash'] = body.txHash;
       if (typeof body.blockNumber === 'number')
         patch['onChain.blockNumber'] = body.blockNumber;
-
-      // IMPORTANT: interpret "status" as onChain.status (NOT report.status)
       if (typeof body.status === 'string')
         patch['onChain.status'] = body.status;
-
-      // Make registered true when we have txHash / confirmed status
-      if (typeof body.txHash === 'string' && body.txHash.trim())
-        patch['onChain.registered'] = true;
-      if (typeof body.status === 'string' && body.status === 'confirmed')
-        patch['onChain.registered'] = true;
-    }
-
-    // Auto-set timestamps
-    if (patch['onChain.txHash'] && !patch['onChain.submittedAt']) {
-      patch['onChain.submittedAt'] = new Date();
-    }
-    if (
-      patch['onChain.status'] === 'confirmed' &&
-      !patch['onChain.confirmedAt']
-    ) {
-      patch['onChain.confirmedAt'] = new Date();
     }
 
     const updated = await updateReportOnChainInDb(reportId, patch);

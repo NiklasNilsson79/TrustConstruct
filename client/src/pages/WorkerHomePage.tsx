@@ -38,6 +38,28 @@ function choiceClass(active: boolean, tone: 'ok' | 'bad' | 'na') {
   return `${base} bg-slate-100 text-slate-700 border-slate-200`;
 }
 
+function getTokenOrThrow(): string {
+  const token = localStorage.getItem('tc_token');
+  if (!token) {
+    throw new Error('Missing auth token. Please log in again.');
+  }
+  return token;
+}
+
+async function parseErrorMessage(res: Response): Promise<string> {
+  // Prefer JSON {message}, fall back to raw text
+  try {
+    const data = await res.json();
+    if (data?.message && typeof data.message === 'string') return data.message;
+    return `Request failed (HTTP ${res.status})`;
+  } catch {
+    const text = await res.text().catch(() => '');
+    return text
+      ? `Request failed (HTTP ${res.status}) — ${text}`
+      : `Request failed (HTTP ${res.status})`;
+  }
+}
+
 export default function WorkerHomePage() {
   const navigate = useNavigate();
 
@@ -62,12 +84,11 @@ export default function WorkerHomePage() {
     setChecks((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Component ID is now optional. Location input removed.
+  // Component ID is optional. Location input removed.
   const canSubmit =
     projectId.trim().length > 0 && roomId.trim().length > 0 && !submitting;
 
   async function onSubmit(e: React.FormEvent) {
-    console.log('[submit] onSubmit triggered');
     e.preventDefault();
     if (!canSubmit) return;
 
@@ -75,19 +96,17 @@ export default function WorkerHomePage() {
     setSubmitError(null);
 
     try {
-      const token = localStorage.getItem('token'); // anpassa om ni lagrar token på annat sätt
+      const token = getTokenOrThrow();
 
       const payload = {
         projectId: projectId.trim(),
 
-        // Keep backend compatibility: store a stable "location" value.
-        // We'll render this as the top line in the Location card (Project ID) in ReportDetailPage.
+        // Backend compatibility: "location" is required by schema.
+        // Current UI uses projectId as a stable location line in ReportDetailPage.
         location: projectId.trim(),
 
         apartmentId: apartmentId.trim() || undefined,
         roomId: roomId.trim(),
-
-        // Component ID is optional now
         componentId: componentId.trim() || undefined,
 
         checklist: checks,
@@ -95,38 +114,25 @@ export default function WorkerHomePage() {
         photoUrl: photoUrl.trim() || undefined,
       };
 
-      console.log('[submit] about to POST /api/reports');
-
+      // 1) Create report in backend (requires auth)
       const res = await fetch('/api/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
 
-      console.log('[submit] got response:', res.status);
-
       if (!res.ok) {
-        // Försök läsa ett tydligt fel från backend (om ni skickar { message })
-        let msg = `Failed to submit report (HTTP ${res.status})`;
-        try {
-          const data = await res.json();
-          console.log('[submit] response data:', data);
-
-          if (data?.message && typeof data.message === 'string')
-            msg = data.message;
-        } catch {
-          // ignore JSON parse errors
-        }
+        const msg = await parseErrorMessage(res);
         throw new Error(msg);
       }
 
       const created = await res.json();
 
+      // 2) Register on-chain
       const registryAddress = import.meta.env.VITE_REPORT_REGISTRY_ADDRESS;
-
       if (!registryAddress) {
         throw new Error('Missing VITE_REPORT_REGISTRY_ADDRESS in client env');
       }
@@ -146,25 +152,19 @@ export default function WorkerHomePage() {
 
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-
-      // ethers v6 Contract expects InterfaceAbi; we safely cast the unknown ABI
       const registry = new Contract(registryAddress, abi, signer);
 
-      console.log('[submit] registering reportHash on-chain:', reportHash0x);
-
       const tx = await registry.registerReport(reportHash0x);
-      console.log('[submit] on-chain tx:', tx.hash);
-
       await tx.wait();
 
-      // After on-chain confirmed, persist tx info back to backend
+      // 3) Persist tx info back to backend (requires auth)
       const patchRes = await fetch(
         `/api/reports/${encodeURIComponent(created._id)}/onchain`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             txHash: tx.hash,
@@ -175,18 +175,12 @@ export default function WorkerHomePage() {
       );
 
       if (!patchRes.ok) {
-        const text = await patchRes.text().catch(() => '');
-        throw new Error(
-          `Failed to persist on-chain status (${patchRes.status}): ${text}`
-        );
+        const msg = await parseErrorMessage(patchRes);
+        throw new Error(msg);
       }
 
-      const updated = await patchRes.json();
-      console.log('[submit] updated after onchain patch:', updated);
-
-      console.log('[submit] on-chain confirmed');
-
-      console.log('[submit] final:', updated);
+      // Optional: you can read updated, but not required for navigation
+      // const updated = await patchRes.json();
 
       navigate('/worker/reports', { replace: true });
     } catch (err) {
