@@ -1,81 +1,48 @@
-function isNotOkValue(value) {
-  if (value === null || value === undefined) return false;
+// backend/src/utils/hasIssuesFromChecklist.js
 
-  const v = String(value).trim().toLowerCase();
+function normalizeValue(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).trim().toUpperCase();
+}
 
-  // Treat these as "not an issue" (assuming UI prevents submit until assessed)
-  if (v === '' || v === 'na' || v === 'n/a' || v === 'not applicable')
-    return false;
+function isExplicitNotOk(value) {
+  const v = normalizeValue(value);
 
-  // OK variants
-  if (v === 'ok' || v === 'pass' || v === 'passed') return false;
+  // Only treat explicit NOT_OK / NOT OK as an issue
+  if (v === 'NOT_OK') return true;
+  if (v === 'NOT OK') return true;
 
-  // NOT OK variants
-  if (
-    v === 'not ok' ||
-    v === 'not_ok' ||
-    v === 'not-ok' ||
-    v === 'notok' ||
-    v === 'fail' ||
-    v === 'failed'
-  ) {
-    return true;
-  }
-
-  // If your system uses booleans sometimes:
-  // true => OK, false => NOT OK
-  if (typeof value === 'boolean') return value === false;
-
-  // Default: unknown values are NOT treated as issues
-  // (so we only route to manager when explicitly NOT OK)
   return false;
 }
 
 function hasIssuesFromChecklist(checklist) {
-  if (!checklist) return false;
+  if (!checklist || typeof checklist !== 'object') return false;
 
-  // Case 1: checklist object map: { key: "OK" | "NOT_OK" | ... }
-  if (
-    !Array.isArray(checklist) &&
-    typeof checklist === 'object' &&
-    !checklist.items
-  ) {
-    return Object.values(checklist).some(isNotOkValue);
-  }
-
-  // Case 2: checklist wrapper: { items: [...] }
-  if (
-    checklist &&
-    typeof checklist === 'object' &&
-    Array.isArray(checklist.items)
-  ) {
-    return checklist.items.some((item) => {
-      // prefer status/result fields if present
-      const status = item?.status ?? item?.result;
-      if (status !== undefined) return isNotOkValue(status);
-
-      // fall back to booleans if present
-      if (item?.notOk === true) return true;
-      if (item?.ok === false) return true;
-
-      return false;
-    });
-  }
-
-  // Case 3: checklist is an array of items
+  // If checklist is an array of items (defensive)
   if (Array.isArray(checklist)) {
     return checklist.some((item) => {
-      const status = item?.status ?? item?.result;
-      if (status !== undefined) return isNotOkValue(status);
+      if (!item) return false;
 
-      if (item?.notOk === true) return true;
-      if (item?.ok === false) return true;
+      // Common shapes
+      if (isExplicitNotOk(item)) return true;
+      if (isExplicitNotOk(item.value)) return true;
+      if (isExplicitNotOk(item.status)) return true;
+      if (isExplicitNotOk(item.result)) return true;
 
       return false;
     });
   }
 
-  return false;
+  // Normal object: { surface_preparation: "OK", ... }
+  return Object.values(checklist).some((val) => {
+    // Sometimes val can be an object: { value: "OK" } etc
+    if (val && typeof val === 'object') {
+      const v1 = val.value ?? val.status ?? val.result;
+      return isExplicitNotOk(v1);
+    }
+
+    return isExplicitNotOk(val);
+  });
 }
 
 module.exports = { hasIssuesFromChecklist };

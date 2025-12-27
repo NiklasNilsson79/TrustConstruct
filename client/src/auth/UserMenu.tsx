@@ -1,27 +1,19 @@
-import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth, getUser } from './authStore';
 import type { AuthUser } from './authTypes';
 
-function toDisplayName(user: AuthUser | null) {
-  if (!user?.email) return 'Unknown user';
-  const local = user.email.split('@')[0] || user.email;
-  return local
-    .replace(/[._-]+/g, ' ')
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+function titleCaseRole(role?: string) {
+  if (!role) return '';
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 export function UserMenu() {
   const navigate = useNavigate();
   const user = getUser<AuthUser>();
 
-  const displayName = useMemo(() => toDisplayName(user ?? null), [user]);
-  const roleLabel = user?.role
-    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-    : '';
+  const displayName = user?.name?.trim() || 'Unknown user';
+  const displayCompany = user?.company?.trim() || '';
+  const roleLabel = titleCaseRole(user?.role);
 
   function onLogout() {
     clearAuth();
@@ -50,10 +42,12 @@ export function UserMenu() {
         </svg>
       </div>
 
-      {/* Name + role  “John Worker” + “Worker” */}
+      {/* Name + company */}
       <div className="leading-tight">
         <div className="text-sm font-medium text-slate-900">{displayName}</div>
-        <div className="text-xs text-slate-500">{roleLabel}</div>
+        <div className="text-xs text-slate-500">
+          {displayCompany || roleLabel || '—'}
+        </div>
       </div>
 
       {/* Role pill */}

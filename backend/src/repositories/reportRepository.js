@@ -1,8 +1,44 @@
+// backend/src/repositories/reportRepository.js
 const mongoose = require('mongoose');
 const Report = require('../models/Report');
 
+/**
+ * Fields used by detail view (ReportDetailPage) and approve/chain flows.
+ * Keep these consistent so frontend always gets onChain + reportHash, etc.
+ */
+const selectDetailFields = [
+  'id',
+  'status',
+  'project',
+  'location',
+  'contractor',
+  'contractorName',
+  'contractorCompany',
+  'contractorUserId',
+  'inspection',
+  'reportHash',
+  'onChain',
+  'createdAt',
+  'updatedAt',
+].join(' ');
+
+function buildReportIdFilter(reportId) {
+  // Supports both Mongo _id (24-hex string) and business id (RPT-....)
+  if (!reportId) return null;
+
+  // If it's a valid ObjectId, match by _id
+  if (mongoose.isValidObjectId(reportId)) {
+    return { _id: reportId };
+  }
+
+  // Otherwise assume it's business id (e.g., "RPT-20251227-XXXXX")
+  return { id: reportId };
+}
+
 async function createReport(report) {
-  return Report.create(report);
+  const created = await Report.create(report);
+  // Return lean for consistent consumer behavior
+  return Report.findById(created._id).select(selectDetailFields).lean();
 }
 
 async function listReports() {
@@ -10,66 +46,53 @@ async function listReports() {
 }
 
 async function listReportsByContractor(contractor) {
+  // Note: contractor historically stored as "Worker"/"Manager" label.
+  // Keep as-is for now since you said lists are working.
   return Report.find({ contractor }).sort({ createdAt: -1 }).lean();
 }
 
-// IMPORTANT: For detail/approve flow we MUST have reportHash available.
-// If schema uses `select: false` on reportHash, we need +reportHash explicitly.
 async function getReportById(reportId) {
-  if (!reportId) return null;
+  const filter = buildReportIdFilter(reportId);
+  if (!filter) return null;
 
-  const selectDetailFields = '+reportHash +onChain +chainError';
-
-  // 1) Try Mongo _id (ObjectId)
-  const isObjectId =
-    mongoose.Types.ObjectId.isValid(reportId) &&
-    String(new mongoose.Types.ObjectId(reportId)) === reportId;
-
-  if (isObjectId) {
-    const byMongoId = await Report.findById(reportId)
-      .select(selectDetailFields)
-      .lean();
-    if (byMongoId) return byMongoId;
-  }
-
-  // 2) Fallback: custom id (RPT-...)
-  return Report.findOne({ id: reportId }).select(selectDetailFields).lean();
+  return Report.findOne(filter).select(selectDetailFields).lean();
 }
 
-async function updateReportStatus(reportId, status) {
-  if (!reportId) return null;
+async function updateReportStatus(reportId, statusPatch) {
+  const filter = buildReportIdFilter(reportId);
+  if (!filter) return null;
 
-  const isObjectId =
-    mongoose.Types.ObjectId.isValid(reportId) &&
-    String(new mongoose.Types.ObjectId(reportId)) === reportId;
+  // Allow either { status: 'pending' } or full patch
+  const patch =
+    statusPatch && typeof statusPatch === 'object'
+      ? statusPatch
+      : { status: statusPatch };
 
-  if (isObjectId) {
-    return Report.findByIdAndUpdate(reportId, { status }, { new: true }).lean();
-  }
-
-  return Report.findOneAndUpdate(
-    { id: reportId },
-    { status },
-    { new: true }
-  ).lean();
+  return Report.findOneAndUpdate(filter, { $set: patch }, { new: true })
+    .select(selectDetailFields)
+    .lean();
 }
 
+/**
+ * Used after chain interactions to persist on-chain metadata.
+ * IMPORTANT: must update the correct report regardless of whether caller passes
+ * Mongo _id or business id.
+ *
+ * Example patch:
+ * {
+ *   status: 'confirmed',
+ *   onChain: { registered: true, status: 'confirmed', txHash: '0x..', ... }
+ * }
+ */
 async function updateReportOnChain(reportId, patch) {
   if (!reportId) return null;
+  if (!patch || typeof patch !== 'object') return null;
 
-  const isObjectId =
-    mongoose.Types.ObjectId.isValid(reportId) &&
-    String(new mongoose.Types.ObjectId(reportId)) === reportId;
+  const filter = buildReportIdFilter(reportId);
+  if (!filter) return null;
 
-  const selectDetailFields = '+reportHash +onChain +chainError';
-
-  if (isObjectId) {
-    return Report.findByIdAndUpdate(reportId, patch, { new: true })
-      .select(selectDetailFields)
-      .lean();
-  }
-
-  return Report.findOneAndUpdate({ id: reportId }, patch, { new: true })
+  // Always use $set to avoid replacing nested objects unintentionally.
+  return Report.findOneAndUpdate(filter, { $set: patch }, { new: true })
     .select(selectDetailFields)
     .lean();
 }

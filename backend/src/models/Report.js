@@ -38,6 +38,7 @@ const InspectionSchema = new mongoose.Schema(
         enum: ChecklistValueEnum,
       },
       required: true,
+      default: () => new Map(),
     },
 
     comments: { type: String, trim: true, default: '' },
@@ -48,10 +49,8 @@ const InspectionSchema = new mongoose.Schema(
 
 const OnChainSchema = new mongoose.Schema(
   {
-    // Bakåtkompatibelt fält (om ni redan använder "registered" i UI)
     registered: { type: Boolean, default: false },
 
-    // Rekommenderat: tydligare state-machine
     status: {
       type: String,
       enum: ['not_submitted', 'pending', 'confirmed', 'failed'],
@@ -67,6 +66,8 @@ const OnChainSchema = new mongoose.Schema(
 
     submittedAt: { type: Date, default: null },
     confirmedAt: { type: Date, default: null },
+
+    error: { type: String, trim: true, default: '' },
   },
   { _id: false }
 );
@@ -81,7 +82,7 @@ const ReportSchema = new mongoose.Schema(
       index: true,
       trim: true,
 
-      //  om frontend/backenden inte skickar id, generera ett automatiskt
+      // om frontend/backenden inte skickar id, generera ett automatiskt
       default: generateReportId,
     },
 
@@ -95,7 +96,25 @@ const ReportSchema = new mongoose.Schema(
 
     project: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
+
+    // Legacy / existing field (keep for compatibility)
     contractor: { type: String, required: true, trim: true },
+
+    // New: store the actual signer (display) separately from legacy `contractor`
+    // This lets the UI show "Name — Company" while keeping backward compatibility.
+    contractorName: { type: String, required: false, trim: true, default: '' },
+    contractorCompany: {
+      type: String,
+      required: false,
+      trim: true,
+      default: '',
+    },
+    contractorUserId: {
+      type: String,
+      required: false,
+      trim: true,
+      default: '',
+    },
 
     // Viktigt: stabilt och ingår i hashen
     // (Mongoose castar ISO-string -> Date automatiskt)
@@ -111,39 +130,42 @@ const ReportSchema = new mongoose.Schema(
       type: OnChainSchema,
       default: () => ({ registered: false, status: 'not_submitted' }),
     },
-
-    // Om on-chain-register misslyckar (utan att ni degraderar status)
-    chainError: { type: String, trim: true, default: '' },
   },
   {
-    collection: 'reports',
+    timestamps: false,
+    strict: true,
+    minimize: false,
     versionKey: '__v',
   }
 );
 
 // Extra index (valfritt men bra)
 ReportSchema.index({ contractor: 1, createdAt: -1 });
+ReportSchema.index({ contractorUserId: 1, createdAt: -1 });
+ReportSchema.index({ contractorCompany: 1, createdAt: -1 });
 
 const crypto = require('crypto');
 
 // Normaliserar Mongoose Map -> sorterad plain object (stabil hashing)
 function normalizeChecklistMap(checklist) {
   if (!checklist) return {};
-  // checklist kan vara Map eller plain object beroende på var den kommer ifrån
   const obj =
-    checklist instanceof Map
-      ? Object.fromEntries(checklist.entries())
-      : checklist;
-  const sortedKeys = Object.keys(obj).sort();
-  const out = {};
-  for (const k of sortedKeys) out[k] = obj[k];
-  return out;
+    checklist instanceof Map ? Object.fromEntries(checklist) : checklist;
+
+  return Object.keys(obj)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {});
 }
 
-// Minimal, stabil canonical payload (anpassad till era fält)
-function computeReportHashFromDoc(doc) {
+function buildCanonicalReportForHash(doc) {
+  // OBS: håll detta stabilt över tid annars ändras hash/logik
   const payload = {
     id: doc.id,
+    status: doc.status,
+    project: doc.project,
     location: doc.location,
     contractor: doc.contractor,
     createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
@@ -167,12 +189,19 @@ function computeReportHashFromDoc(doc) {
 // Safety-net: om reportHash saknas på en ny/uppdaterad report så beräknas den
 ReportSchema.pre('validate', function () {
   // använd INTE arrow function
+  if (!this.createdAt) this.createdAt = new Date();
 
   if (!this.reportHash) {
-    this.reportHash = computeReportHashFromDoc(this);
+    this.reportHash = buildCanonicalReportForHash(this);
   }
 
-  if (!this.onChain) this.onChain = {};
+  // Sätt default onChain fields om de saknas
+  if (!this.onChain) {
+    this.onChain = { registered: false, status: 'not_submitted' };
+  }
+
+  if (this.onChain.registered === undefined) this.onChain.registered = false;
+  if (!this.onChain.status) this.onChain.status = 'not_submitted';
 
   if (!this.onChain.network) {
     this.onChain.network = process.env.CHAIN_ENV || 'sepolia';

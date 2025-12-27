@@ -19,6 +19,11 @@ import {
   type ChecklistValue,
 } from '../reports/reportService';
 
+type ReportWithSigner = ReportDto & {
+  contractorName?: string;
+  contractorCompany?: string;
+};
+
 type SummaryMeta = {
   location: { id: string; detail: string };
   component: string;
@@ -99,6 +104,17 @@ function formatAptRoomLine(report: ReportDto | null): string {
 
   if (apt && room) return `${apt} / ${room}`;
   return apt || room || '';
+}
+
+function formatContractorDisplay(report: ReportWithSigner | null): string {
+  const name = report?.contractorName?.trim() ?? '';
+  const company = report?.contractorCompany?.trim() ?? '';
+
+  if (name && company) return `${name} — ${company}`;
+  if (name) return name;
+  if (company) return company;
+
+  return report?.contractor?.trim() || '—';
 }
 
 export default function ReportDetailPage() {
@@ -242,23 +258,25 @@ export default function ReportDetailPage() {
   }, [report?.status]);
 
   const summary: Summary = useMemo(() => {
-    const id = report?.id ?? reportId ?? '—';
+    const r = report as ReportWithSigner | null;
+
+    const id = r?.id ?? reportId ?? '—';
 
     // Top line in "Location" card should be Project ID (prefer report.project),
     // fallback to report.location if backend still uses that field.
-    const projectLine = (report?.project ?? report?.location ?? '—').toString();
+    const projectLine = (r?.project ?? r?.location ?? '—').toString();
 
     // Second line should be Apartment/Room from inspection
-    const aptRoomLine = formatAptRoomLine(report);
+    const aptRoomLine = formatAptRoomLine(r);
 
     // Component is optional
-    const componentLine = report?.inspection?.componentId?.trim() || '—';
+    const componentLine = r?.inspection?.componentId?.trim() || '—';
 
-    // Contractor from DB (still "Worker" until we wire real identity)
-    const contractorLine = report?.contractor?.trim() || '—';
+    // Contractor: prefer name+company (new fields), fallback to old contractor string
+    const contractorLine = formatContractorDisplay(r);
 
-    const createdLine = report?.createdAt
-      ? new Date(report.createdAt).toLocaleString()
+    const createdLine = r?.createdAt
+      ? new Date(r.createdAt).toLocaleString()
       : '—';
 
     return {
@@ -319,9 +337,13 @@ export default function ReportDetailPage() {
     const text = report?.inspection?.comments;
     if (!text) return [];
 
+    const contractorDisplay = formatContractorDisplay(
+      report as ReportWithSigner | null
+    );
+
     return [
       {
-        author: report.contractor ?? 'Worker',
+        author: contractorDisplay || 'Worker',
         timestamp: report.createdAt
           ? new Date(report.createdAt).toLocaleString()
           : '',

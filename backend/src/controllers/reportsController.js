@@ -11,33 +11,41 @@ const { hasIssuesFromChecklist } = require('../utils/hasIssuesFromChecklist');
 const { hashReport } = require('../utils/hashReport');
 const { registerReportOnChain } = require('../services/reportRegistryService');
 
+function getAuthUser(req) {
+  // Stöd både req.user och req.auth (för framtida middleware)
+  return req.user || req.auth || null;
+}
+
 async function listReports(_req, res) {
   try {
     const reports = await listReportsFromDb();
     return res.status(200).json(reports);
   } catch (err) {
     console.error('[reportsController] listReports failed', err);
-    return res.status(500).json({ message: 'Failed to list reports' });
+    return res.status(500).json({ message: 'Failed to fetch reports' });
   }
 }
 
 async function getReportById(req, res) {
   try {
     const { reportId } = req.params;
-
     const report = await getReportByIdFromDb(reportId);
-    if (!report) return res.status(404).json({ message: 'Report not found' });
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
 
     return res.status(200).json(report);
   } catch (err) {
     console.error('[reportsController] getReportById failed', err);
-    return res.status(500).json({ message: 'Failed to get report' });
+    return res.status(500).json({ message: 'Failed to fetch report' });
   }
 }
 
 async function createReport(req, res) {
   try {
     const body = req.body || {};
+    const authUser = getAuthUser(req);
 
     // --- 1) Support BOTH payload shapes (legacy root fields + nested inspection) ---
 
@@ -72,28 +80,24 @@ async function createReport(req, res) {
         ? body.inspection
         : null;
 
-    // createdAt
-    const createdAt = body?.createdAt ? new Date(body.createdAt) : new Date();
-
-    // --- 2) Normalize inspection object so schema validation passes ---
+    // --- 2) Normalize inspection payload ---
     const inspection = {
       projectId:
-        (typeof providedInspection?.projectId === 'string' &&
-          providedInspection.projectId.trim()) ||
-        legacyProjectId,
+        (typeof providedInspection?.projectId === 'string'
+          ? providedInspection.projectId
+          : legacyProjectId) || '',
       apartmentId:
-        (typeof providedInspection?.apartmentId === 'string' &&
-          providedInspection.apartmentId.trim()) ||
-        legacyApartmentId ||
-        '',
+        (typeof providedInspection?.apartmentId === 'string'
+          ? providedInspection.apartmentId
+          : legacyApartmentId) || '',
       roomId:
-        (typeof providedInspection?.roomId === 'string' &&
-          providedInspection.roomId.trim()) ||
-        legacyRoomId,
+        (typeof providedInspection?.roomId === 'string'
+          ? providedInspection.roomId
+          : legacyRoomId) || '',
       componentId:
-        (typeof providedInspection?.componentId === 'string' &&
-          providedInspection.componentId.trim()) ||
-        legacyComponentId,
+        typeof providedInspection?.componentId === 'string'
+          ? providedInspection.componentId
+          : legacyComponentId,
       checklist:
         (providedInspection?.checklist &&
         typeof providedInspection.checklist === 'object'
@@ -115,21 +119,40 @@ async function createReport(req, res) {
     const project =
       providedProject || inspection.projectId || 'UNKNOWN_PROJECT';
     const location = providedLocation || 'UNKNOWN_LOCATION';
-    const contractor = providedContractor || 'Worker';
+
+    // NEW: Signed-by (from JWT/middleware)
+    const contractorName =
+      typeof authUser?.name === 'string' ? authUser.name.trim() : '';
+    const contractorCompany =
+      typeof authUser?.company === 'string' ? authUser.company.trim() : '';
+    const contractorUserId =
+      (typeof authUser?.sub === 'string' && authUser.sub.trim()) ||
+      (typeof authUser?.id === 'string' && authUser.id.trim()) ||
+      '';
+
+    // NEW: A readable contractor display string (keeps backward compatibility)
+    const contractor =
+      providedContractor ||
+      (contractorName && contractorCompany
+        ? `${contractorName} — ${contractorCompany}`
+        : contractorName || contractorCompany || 'Worker');
 
     // --- 4) Determine status from checklist content ---
     const hasIssues = hasIssuesFromChecklist(inspection?.checklist);
-    const status = hasIssues ? 'pending' : 'approved';
+    const status = hasIssues ? 'submitted' : 'approved';
 
     // --- 5) Compute report hash ---
     const reportHash = hashReport({
       project,
       location,
       contractor,
-      createdAt,
+      createdAt: new Date().toISOString(),
       inspection,
+      status,
     });
 
+    // --- 6) Compose report document ---
+    const createdAt = new Date();
     const network = process.env.CHAIN_ENV || 'sepolia';
     const chainId = network === 'sepolia' ? 11155111 : null;
     const registryAddress = process.env.REPORT_REGISTRY_ADDRESS || '';
@@ -138,6 +161,12 @@ async function createReport(req, res) {
       project,
       location,
       contractor,
+
+      // NEW signer fields (Step 2)
+      contractorName,
+      contractorCompany,
+      contractorUserId,
+
       createdAt,
       inspection,
       status,
@@ -183,7 +212,7 @@ async function createReport(req, res) {
         await created.save();
       } catch (err) {
         console.error('[createReport] on-chain register failed', err);
-        created.chainError = err?.message || 'On-chain register failed';
+        created.chainError = String(err?.message || err);
         created.onChain = {
           ...(created.onChain || {}),
           status: 'failed',
@@ -207,105 +236,84 @@ async function listMyReports(_req, res) {
     return res.status(200).json(mine);
   } catch (err) {
     console.error('[reportsController] listMyReports failed', err);
-    return res.status(500).json({
-      message: 'Failed to create report',
-      error: err?.message,
-      details: err?.errors ? Object.keys(err.errors) : undefined,
-    });
+    return res.status(500).json({ message: 'Failed to fetch my reports' });
   }
 }
-
-/**
- * PATCH /:reportId/onchain
- * Body: { txHash, blockNumber, status, chainError }
- *
- * This endpoint is called by the frontend after OKX wallet signing / tx submission.
- */
 
 async function updateReportOnChain(req, res) {
   try {
     const { reportId } = req.params;
-    const { txHash, blockNumber, status, chainError } = req.body || {};
+    const body = req.body || {};
 
-    const report = await getReportByIdFromDb(reportId);
-    if (!report) return res.status(404).json({ message: 'Report not found' });
+    // Support BOTH shapes:
+    // A) { txHash, blockNumber, status: "confirmed", chainError: "" }   (legacy client)
+    // B) { onChain: { registered, status, txHash, blockNumber, ... }, chainError: "" } (preferred)
 
-    // Ensure reportHash exists (recompute if missing)
-    let reportHash = report.reportHash;
-    if (!reportHash) {
-      try {
-        reportHash = hashReport({
-          project: report.project,
-          location: report.location,
-          contractor: report.contractor,
-          createdAt: report.createdAt,
-          inspection: report.inspection,
-        });
-      } catch (e) {
-        console.error(
-          '[updateReportOnChain] failed to recompute reportHash',
-          e
-        );
-      }
+    const patch = {};
+
+    // Keep chainError at root (if you use it), or move it into onChain.error.
+    if (typeof body.chainError === 'string') {
+      patch.chainError = body.chainError;
     }
 
-    if (!reportHash) {
-      return res.status(400).json({ message: 'Missing reportHash on report' });
+    // Preferred: nested onChain object
+    if (body.onChain && typeof body.onChain === 'object') {
+      if (typeof body.onChain.registered === 'boolean')
+        patch['onChain.registered'] = body.onChain.registered;
+      if (typeof body.onChain.status === 'string')
+        patch['onChain.status'] = body.onChain.status;
+      if (typeof body.onChain.txHash === 'string')
+        patch['onChain.txHash'] = body.onChain.txHash;
+      if (typeof body.onChain.blockNumber === 'number')
+        patch['onChain.blockNumber'] = body.onChain.blockNumber;
+      if (typeof body.onChain.network === 'string')
+        patch['onChain.network'] = body.onChain.network;
+      if (typeof body.onChain.chainId === 'number')
+        patch['onChain.chainId'] = body.onChain.chainId;
+      if (typeof body.onChain.registryAddress === 'string')
+        patch['onChain.registryAddress'] = body.onChain.registryAddress;
+
+      // timestamps (optional)
+      if (body.onChain.submittedAt)
+        patch['onChain.submittedAt'] = body.onChain.submittedAt;
+      if (body.onChain.confirmedAt)
+        patch['onChain.confirmedAt'] = body.onChain.confirmedAt;
+      if (typeof body.onChain.error === 'string')
+        patch['onChain.error'] = body.onChain.error;
+    } else {
+      // Legacy: flatten mapping
+      if (typeof body.txHash === 'string')
+        patch['onChain.txHash'] = body.txHash;
+      if (typeof body.blockNumber === 'number')
+        patch['onChain.blockNumber'] = body.blockNumber;
+
+      // IMPORTANT: interpret "status" as onChain.status (NOT report.status)
+      if (typeof body.status === 'string')
+        patch['onChain.status'] = body.status;
+
+      // Make registered true when we have txHash / confirmed status
+      if (typeof body.txHash === 'string' && body.txHash.trim())
+        patch['onChain.registered'] = true;
+      if (typeof body.status === 'string' && body.status === 'confirmed')
+        patch['onChain.registered'] = true;
     }
 
-    const network =
-      process.env.CHAIN_ENV || report.onChain?.network || 'sepolia';
-    const chainId =
-      network === 'sepolia' ? 11155111 : report.onChain?.chainId || null;
-    const registryAddress =
-      process.env.REPORT_REGISTRY_ADDRESS ||
-      report.onChain?.registryAddress ||
-      '';
-
-    const nextStatus =
-      typeof status === 'string' && status.trim().length > 0
-        ? status.trim()
-        : report.onChain?.status || 'not_submitted';
-
-    const nextRegistered =
-      nextStatus === 'confirmed' ? true : report.onChain?.registered || false;
-
-    const nextSubmittedAt =
-      nextStatus === 'pending'
-        ? report.onChain?.submittedAt || new Date()
-        : report.onChain?.submittedAt || null;
-
-    const nextConfirmedAt =
-      nextStatus === 'confirmed'
-        ? new Date()
-        : report.onChain?.confirmedAt || null;
-
-    const patch = {
-      // If we recomputed hash, persist it
-      reportHash,
-
-      onChain: {
-        ...(report.onChain || {}),
-        network,
-        chainId,
-        registryAddress,
-        txHash:
-          typeof txHash === 'string' ? txHash : report.onChain?.txHash || '',
-        blockNumber:
-          typeof blockNumber === 'number'
-            ? blockNumber
-            : report.onChain?.blockNumber || null,
-        status: nextStatus,
-        registered: nextRegistered,
-        submittedAt: nextSubmittedAt,
-        confirmedAt: nextConfirmedAt,
-      },
-
-      chainError: typeof chainError === 'string' ? chainError : '',
-    };
+    // Auto-set timestamps
+    if (patch['onChain.txHash'] && !patch['onChain.submittedAt']) {
+      patch['onChain.submittedAt'] = new Date();
+    }
+    if (
+      patch['onChain.status'] === 'confirmed' &&
+      !patch['onChain.confirmedAt']
+    ) {
+      patch['onChain.confirmedAt'] = new Date();
+    }
 
     const updated = await updateReportOnChainInDb(reportId, patch);
-    if (!updated) return res.status(404).json({ message: 'Report not found' });
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
 
     return res.status(200).json(updated);
   } catch (err) {

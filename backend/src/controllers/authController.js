@@ -1,22 +1,52 @@
+// backend/src/controllers/authController.js
 const jwt = require('jsonwebtoken');
 
-function login(req, res) {
-  const { email, password } = req.body || {};
+const USERS = [
+  {
+    id: 'u_niklas',
+    name: 'Niklas Nilsson',
+    company: 'Nelzon Production AB',
+    role: 'worker',
+  },
+  {
+    id: 'u_carl',
+    name: 'Carl Andersson',
+    company: 'CA Electric AB',
+    role: 'worker',
+  },
+  {
+    id: 'u_tobias',
+    name: 'Tobias Pettersson',
+    company: 'Manager Solutions AB',
+    role: 'manager',
+  },
+];
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required' });
+function login(req, res) {
+  const { name, company, password } = req.body || {};
+
+  if (!name || !company || !password) {
+    return res.status(400).json({
+      message: 'Name, company and password are required',
+    });
   }
 
-  // Sprint 2: hardcoded auth, role baserat på email
-  const role = String(email).toLowerCase().includes('manager')
-    ? 'manager'
-    : 'worker';
+  const user = USERS.find(
+    (u) =>
+      u.name === String(name).trim() && u.company === String(company).trim()
+  );
 
-  const user = {
-    id: 'u_123',
-    email,
-    role,
-  };
+  if (!user) {
+    return res.status(401).json({
+      message: 'Invalid name/company combination',
+    });
+  }
+
+  // Demo-auth: vi kräver bara att password är ifyllt.
+  // Vill du ha riktiga lösenord per user, säg vad de ska vara så lägger vi in det här.
+  if (String(password).trim().length === 0) {
+    return res.status(401).json({ message: 'Invalid password' });
+  }
 
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -24,12 +54,25 @@ function login(req, res) {
   }
 
   const token = jwt.sign(
-    { sub: user.id, email: user.email, role: user.role },
+    {
+      sub: user.id,
+      name: user.name,
+      company: user.company,
+      role: user.role,
+    },
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
   );
 
-  return res.status(200).json({ token, user });
+  return res.status(200).json({
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      company: user.company,
+      role: user.role,
+    },
+  });
 }
 
 module.exports = { login };
