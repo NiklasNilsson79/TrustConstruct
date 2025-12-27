@@ -62,11 +62,9 @@ export default function WorkerHomePage() {
     setChecks((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Component ID is now optional. Location input removed.
   const canSubmit =
-    projectId.trim().length > 0 &&
-    roomId.trim().length > 0 &&
-    componentId.trim().length > 0 &&
-    !submitting;
+    projectId.trim().length > 0 && roomId.trim().length > 0 && !submitting;
 
   async function onSubmit(e: React.FormEvent) {
     console.log('[submit] onSubmit triggered');
@@ -81,9 +79,17 @@ export default function WorkerHomePage() {
 
       const payload = {
         projectId: projectId.trim(),
+
+        // Keep backend compatibility: store a stable "location" value.
+        // We'll render this as the top line in the Location card (Project ID) in ReportDetailPage.
+        location: projectId.trim(),
+
         apartmentId: apartmentId.trim() || undefined,
         roomId: roomId.trim(),
-        componentId: componentId.trim(),
+
+        // Component ID is optional now
+        componentId: componentId.trim() || undefined,
+
         checklist: checks,
         comments: comments.trim() || undefined,
         photoUrl: photoUrl.trim() || undefined,
@@ -182,7 +188,6 @@ export default function WorkerHomePage() {
 
       console.log('[submit] final:', updated);
 
-      // Om ni vill: const created = await res.json();
       navigate('/worker/reports', { replace: true });
     } catch (err) {
       const message =
@@ -252,12 +257,13 @@ export default function WorkerHomePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Component ID</label>
+                  <label className="text-sm font-medium">
+                    Component ID (optional)
+                  </label>
                   <Input
                     value={componentId}
                     onChange={(e) => setComponentId(e.target.value)}
                     placeholder="e.g., COMP-WALL-01"
-                    required
                   />
                 </div>
               </div>

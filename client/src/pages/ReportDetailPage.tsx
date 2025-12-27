@@ -75,6 +75,32 @@ async function patchOnChain(reportId: string, body: any) {
   return res.json();
 }
 
+function formatAptRoomLine(report: ReportDto | null): string {
+  const aptRaw = report?.inspection?.apartmentId?.trim() ?? '';
+  const roomRaw = report?.inspection?.roomId?.trim() ?? '';
+
+  const formatApartment = (v: string) => {
+    if (!v) return '';
+    const lower = v.toLowerCase();
+    if (lower.startsWith('apt') || lower.startsWith('apartment')) return v;
+    return `Apartment ${v}`;
+  };
+
+  const formatRoom = (v: string) => {
+    if (!v) return '';
+    const lower = v.toLowerCase().replace(/\s+/g, '');
+    // If user already typed "room..." (e.g. Room305 / room 305), don't prefix again
+    if (lower.startsWith('room')) return v;
+    return `Room ${v}`;
+  };
+
+  const apt = formatApartment(aptRaw);
+  const room = formatRoom(roomRaw);
+
+  if (apt && room) return `${apt} / ${room}`;
+  return apt || room || '';
+}
+
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>();
 
@@ -169,11 +195,9 @@ export default function ReportDetailPage() {
     try {
       // 1) On-chain (triggers OKX)
       // approveReportOnChain adds 0x-prefix + validates bytes32 length internally.
-      // If contract reverts (AlreadyRegistered, etc.) we catch and show.
       const { txHash, blockNumber } = await approveReportOnChain(hash);
 
       // 2) Persist on-chain result to backend
-      // Mark as confirmed + store tx metadata
       const patched = await patchOnChain(id, {
         txHash,
         blockNumber,
@@ -181,28 +205,23 @@ export default function ReportDetailPage() {
         chainError: '',
       });
 
-      // Keep UI in sync with DB immediately
       setReport(patched);
 
       // 3) Update business/status (approved)
       const updated = await updateReportStatus(id, 'approved');
       setReport(updated);
-
-      // Optional: refetch for full consistency
-      // const fresh = await getReport(id);
-      // setReport(fresh);
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : 'Failed to approve/register report';
 
-      // Best effort: store failure state in backend (do not block UI if this fails)
+      // Best effort: store failure state in backend
       try {
         await patchOnChain(id, {
           status: 'failed',
           chainError: msg,
         });
       } catch {
-        // ignore secondary failure; the main error is still shown
+        // ignore secondary failure
       }
 
       setApproveError(msg);
@@ -219,12 +238,28 @@ export default function ReportDetailPage() {
     if (raw === 'rejected') return 'rejected';
     if (raw === 'draft') return 'draft';
 
-    // Treat anything else (pending/submitted/etc.) as "submitted" in UI
     return 'submitted';
   }, [report?.status]);
 
   const summary: Summary = useMemo(() => {
     const id = report?.id ?? reportId ?? '—';
+
+    // Top line in "Location" card should be Project ID (prefer report.project),
+    // fallback to report.location if backend still uses that field.
+    const projectLine = (report?.project ?? report?.location ?? '—').toString();
+
+    // Second line should be Apartment/Room from inspection
+    const aptRoomLine = formatAptRoomLine(report);
+
+    // Component is optional
+    const componentLine = report?.inspection?.componentId?.trim() || '—';
+
+    // Contractor from DB (still "Worker" until we wire real identity)
+    const contractorLine = report?.contractor?.trim() || '—';
+
+    const createdLine = report?.createdAt
+      ? new Date(report.createdAt).toLocaleString()
+      : '—';
 
     return {
       id,
@@ -232,14 +267,12 @@ export default function ReportDetailPage() {
       status: uiStatus,
       meta: {
         location: {
-          id: report?.location ?? '2652765',
-          detail: 'AP-2110 / Room 102-3',
+          id: projectLine,
+          detail: aptRoomLine,
         },
-        component: report?.project ?? 'Bathroom',
-        contractor: report?.contractor ?? 'John Worker',
-        created: report?.createdAt
-          ? new Date(report.createdAt).toLocaleString()
-          : 'December 9, 2025 at 03:32 PM',
+        component: componentLine,
+        contractor: contractorLine,
+        created: createdLine,
       },
     };
   }, [report, reportId, uiStatus]);
@@ -409,9 +442,11 @@ export default function ReportDetailPage() {
                     <div className="mt-1 text-sm font-medium">
                       {summary.meta.location.id}
                     </div>
-                    <div className="text-sm text-slate-600">
-                      {summary.meta.location.detail}
-                    </div>
+                    {summary.meta.location.detail ? (
+                      <div className="text-sm text-slate-600">
+                        {summary.meta.location.detail}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="rounded-lg border bg-white px-4 py-3">

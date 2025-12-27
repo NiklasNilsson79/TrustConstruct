@@ -28,7 +28,7 @@ const InspectionSchema = new mongoose.Schema(
     projectId: { type: String, required: true, trim: true },
     apartmentId: { type: String, trim: true, default: '' },
     roomId: { type: String, required: true, trim: true },
-    componentId: { type: String, required: true, trim: true },
+    componentId: { type: String, required: false, trim: true },
 
     // checklist är ett object med dynamiska keys (surface_preparation, osv)
     checklist: {
