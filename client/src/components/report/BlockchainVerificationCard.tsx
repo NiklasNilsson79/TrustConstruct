@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-
+import { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -7,13 +6,13 @@ import {
   CardTitle,
   CardDescription,
 } from '../Card';
-import { type ReportDto } from '../../reports/reportService';
+import type { ReportDto } from '../../reports/reportService';
 
 type ChainVerifyResponse = {
   ok: boolean;
   isRegistered: boolean;
   submitter?: string;
-  timestamp?: number;
+  timestamp?: number; // seconds since epoch
 };
 
 type Props = {
@@ -36,78 +35,41 @@ function badgeTone(status: UiStatus) {
   return 'bg-red-50 text-red-700 border-red-200';
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(
-      `HTTP ${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`
-    );
-  }
-
-  return (await res.json()) as T;
-}
-
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
-
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(
       `HTTP ${res.status} ${res.statusText}${text ? ` — ${text}` : ''}`
     );
   }
-
-  return (await res.json()) as T;
+  return res.json();
 }
 
-/**
- * Tries both payload shapes because different backends implement /api/reports/hash differently:
- * 1) { report: <ReportDto> }
- * 2) <ReportDto> directly
- */
-async function calculateReportHash(report: ReportDto): Promise<string> {
-  // Attempt 1: { report }
-  try {
-    const r1 = await postJson<{
-      ok?: boolean;
-      reportHash?: string;
-      hash?: string;
-    }>('/api/reports/hash', { report });
-    const h1 = r1.reportHash ?? r1.hash;
-    if (h1) return h1;
-  } catch {
-    // ignore and try alternate shape
+function networkLabelFromReport(report: ReportDto | null): string {
+  const chainId = report?.onChain?.chainId;
+  const network = report?.onChain?.network;
+
+  if (network) {
+    // Ex: "sepolia" -> "Sepolia"
+    return network.charAt(0).toUpperCase() + network.slice(1);
   }
-
-  // Attempt 2: report directly
-  const r2 = await postJson<{
-    ok?: boolean;
-    reportHash?: string;
-    hash?: string;
-  }>('/api/reports/hash', report);
-
-  const h2 = r2.reportHash ?? r2.hash;
-  if (!h2) throw new Error('Hash endpoint returned no hash/reportHash.');
-  return h2;
+  if (chainId === 11155111) return 'Sepolia';
+  if (chainId === 31337) return 'Local (Anvil)';
+  if (chainId) return `Chain ID ${chainId}`;
+  return '—';
 }
 
 export default function BlockchainVerificationCard({ report }: Props) {
-  const [reportHash, setReportHash] = useState<string | null>(null);
   const [status, setStatus] = useState<UiStatus>('Pending');
   const [isLoading, setIsLoading] = useState(false);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [reportHash, setReportHash] = useState<string | null>(null);
   const [submitter, setSubmitter] = useState<string | null>(null);
   const [timestamp, setTimestamp] = useState<number | null>(null);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Recompute + reverify whenever a different report is shown
-  const stableKey = useMemo(() => report?.id ?? null, [report?.id]);
+  const stableKey = report?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -117,21 +79,39 @@ export default function BlockchainVerificationCard({ report }: Props) {
       setSubmitter(null);
       setTimestamp(null);
       setLastChecked(null);
-      setReportHash(null);
 
       if (!report) {
+        setReportHash(null);
         setStatus('Pending');
+        return;
+      }
+
+      // Prefer server-provided reportHash if it exists (it SHOULD, per your console log)
+      const hash = report.reportHash ?? null;
+      setReportHash(hash);
+
+      // 1) MongoDB/Backend is source of truth: onChain.confirmed => Verified
+      const oc = report.onChain;
+      if (oc?.registered === true && oc.status === 'confirmed') {
+        setStatus('Verified');
+        setSubmitter(oc.submitter ?? null);
+
+        // If backend later adds timestamp to onChain, you can set it here.
+        // For now we keep it blank unless verify gives it.
+        setLastChecked(new Date());
+        return;
+      }
+
+      // 2) If not confirmed, try verify endpoint (only if we have a hash)
+      if (!hash) {
+        setStatus('Pending');
+        setLastChecked(new Date());
         return;
       }
 
       setIsLoading(true);
 
       try {
-        const hash = await calculateReportHash(report);
-        if (cancelled) return;
-
-        setReportHash(hash);
-
         const verify = await getJson<ChainVerifyResponse>(
           `/api/chain/verify/${hash}`
         );
@@ -139,46 +119,35 @@ export default function BlockchainVerificationCard({ report }: Props) {
 
         setLastChecked(new Date());
 
-        if (!verify?.ok) {
+        if (!verify.ok) {
           setStatus('Error');
-          setError('Chain verify returned ok=false.');
+          setError('Chain verification failed.');
           return;
         }
 
         setSubmitter(verify.submitter ?? null);
-        setTimestamp(
-          typeof verify.timestamp === 'number' ? verify.timestamp : null
-        );
-
+        setTimestamp(verify.timestamp ?? null);
         setStatus(verify.isRegistered ? 'Verified' : 'Pending');
-      } catch (e) {
+      } catch (err) {
         if (cancelled) return;
-
-        const msg = e instanceof Error ? e.message : 'Unknown error';
         setStatus('Error');
-        setError(msg);
+        setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     }
 
     run();
-
     return () => {
       cancelled = true;
     };
   }, [stableKey, report]);
 
-  const lastCheckedText = useMemo(() => {
-    if (!lastChecked) return '—';
-    return lastChecked.toLocaleString();
-  }, [lastChecked]);
+  const registeredAtText = timestamp
+    ? new Date(timestamp * 1000).toLocaleString()
+    : '—';
 
-  const registeredAtText = useMemo(() => {
-    if (!timestamp) return '—';
-    // backend timestamp is seconds since epoch
-    return new Date(timestamp * 1000).toLocaleString();
-  }, [timestamp]);
+  const lastCheckedText = lastChecked ? lastChecked.toLocaleString() : '—';
 
   return (
     <Card className={['mt-6', cardTone(status)].join(' ')}>
@@ -187,7 +156,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
           <div>
             <CardTitle>Blockchain Verification</CardTitle>
             <CardDescription>
-              Verifies whether this report hash is registered on-chain.
+              Verifies whether this report is registered on-chain.
             </CardDescription>
           </div>
 
@@ -195,8 +164,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
             className={[
               'inline-flex items-center rounded-full border px-3 py-1 text-xs',
               badgeTone(status),
-            ].join(' ')}
-            title={error ?? undefined}>
+            ].join(' ')}>
             {isLoading ? 'Checking…' : status}
           </span>
         </div>
@@ -204,14 +172,12 @@ export default function BlockchainVerificationCard({ report }: Props) {
 
       <CardContent>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">On-Chain Hash</div>
-
-            <div className="rounded-md border bg-white/70 px-3 py-2 font-mono text-xs text-slate-800 break-all">
-              {reportHash ?? (isLoading ? 'Calculating hash…' : '—')}
+          <div>
+            <div className="text-xs text-muted-foreground">On-chain hash</div>
+            <div className="rounded-md border bg-white/70 px-3 py-2 font-mono text-xs break-all">
+              {reportHash ?? '—'}
             </div>
-
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground mt-1">
               Last checked: {lastCheckedText}
             </div>
           </div>
@@ -219,14 +185,15 @@ export default function BlockchainVerificationCard({ report }: Props) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg border bg-white/70 px-4 py-3">
               <div className="text-xs text-muted-foreground">Network</div>
-              <div className="mt-1 text-sm font-medium">Local (Anvil)</div>
+              <div className="mt-1 text-sm font-medium">
+                {networkLabelFromReport(report)}
+              </div>
             </div>
 
             <div className="rounded-lg border bg-white/70 px-4 py-3">
               <div className="text-xs text-muted-foreground">Submitter</div>
-
               {submitter ? (
-                <div className="mt-1 font-mono text-xs break-all leading-relaxed">
+                <div className="mt-1 font-mono text-xs break-all">
                   {submitter}
                 </div>
               ) : (
@@ -242,7 +209,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
 
           {status === 'Error' && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error ?? 'Verification failed.'}
+              {error}
             </div>
           )}
         </div>

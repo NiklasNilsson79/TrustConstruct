@@ -13,6 +13,36 @@ export type ReportInspectionDto = {
   photoUrl?: string;
 };
 
+/**
+ * Legacy/optional shape (kept to avoid breaking existing code).
+ * Your backend payload (per console) currently uses `onChain` instead.
+ */
+export type BlockchainMetaDto = {
+  txHash: string;
+  chainId: number;
+  status: 'PENDING' | 'CONFIRMED';
+  submitter?: string;
+  blockNumber?: number;
+  verifiedAt?: string; // ISO date
+};
+
+/**
+ * Current backend payload shape (matches your console output):
+ * onChain: { registered: true, status: 'confirmed', network: 'sepolia', chainId: 11155111, ... }
+ */
+export type OnChainDto = {
+  registered: boolean;
+  status: 'pending' | 'confirmed';
+  network?: string;
+  chainId?: number;
+  registryAddress?: string;
+  txHash?: string;
+  submitter?: string;
+  timestamp?: number; // seconds since epoch (if/when provided)
+  blockNumber?: number;
+  verifiedAt?: string; // ISO date (if/when provided)
+};
+
 export type ReportDto = {
   id: string;
   status: string;
@@ -25,8 +55,17 @@ export type ReportDto = {
 
   createdAt?: string;
 
-  // NYTT: matchar backend-response
+  // Matchar din backend-response
   inspection?: ReportInspectionDto;
+
+  // ✅ NYTT: server-calculated hash (seen in your console)
+  reportHash?: string;
+
+  // ✅ NYTT: current on-chain payload (seen in your console)
+  onChain?: OnChainDto;
+
+  // Legacy/optional – keep for now if any UI still references it
+  blockchain?: BlockchainMetaDto;
 };
 
 // Small helper so we don't duplicate header logic
@@ -51,7 +90,7 @@ export async function listReports(): Promise<ReportDto[]> {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(
-      `Failed to fetch reports (${res.status}): ${text || res.statusText}`
+      `Failed to list reports (${res.status}): ${text || res.statusText}`
     );
   }
 
@@ -59,34 +98,10 @@ export async function listReports(): Promise<ReportDto[]> {
 }
 
 /**
- * UI-friendly version:
- * - Returns ReportDto on success
- * - Returns null on "not found"
- * - Throws on other errors
+ * Fetch a single report by id.
+ * Backend: GET /api/reports/:id
  */
-export async function getReport(reportId: string): Promise<ReportDto | null> {
-  if (!reportId) return null;
-
-  try {
-    return await getReportById(reportId);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : '';
-
-    if (message === 'REPORT_NOT_FOUND') {
-      return null;
-    }
-
-    throw e;
-  }
-}
-
-/**
- * Strict version:
- * - Returns ReportDto on success
- * - Throws on all non-OK responses
- * - 404 becomes REPORT_NOT_FOUND (so UI can show "not found" cleanly)
- */
-export async function getReportById(reportId: string): Promise<ReportDto> {
+export async function getReport(reportId: string): Promise<ReportDto> {
   const token = getToken();
 
   const res = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, {
@@ -95,10 +110,6 @@ export async function getReportById(reportId: string): Promise<ReportDto> {
       ...authHeaders(token),
     },
   });
-
-  if (res.status === 404) {
-    throw new Error('REPORT_NOT_FOUND');
-  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
