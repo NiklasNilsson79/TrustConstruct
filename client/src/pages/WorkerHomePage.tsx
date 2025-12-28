@@ -131,6 +131,21 @@ export default function WorkerHomePage() {
 
       const created = await res.json();
 
+      // =========================================================
+      // STEP 1: Guard against Worker signing when report is submitted.
+      // Only proceed with wallet/on-chain registration when status === 'approved'.
+      // If status === 'submitted' (at least one NOT_OK), abort before any ethers calls.
+      // =========================================================
+      if (created?.status !== 'approved') {
+        console.log(
+          '[WorkerHomePage] Skipping on-chain signing/registration. Report status:',
+          created?.status
+        );
+
+        navigate('/worker/reports', { replace: true });
+        return;
+      }
+
       // 2) Register on-chain
       const registryAddress = import.meta.env.VITE_REPORT_REGISTRY_ADDRESS;
       if (!registryAddress) {

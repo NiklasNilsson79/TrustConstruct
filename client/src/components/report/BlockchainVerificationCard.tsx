@@ -51,24 +51,8 @@ function normalizeHexHash(hash: string): string {
   return h.startsWith('0x') ? h : `0x${h}`;
 }
 
-/**
- * Fetch only metadata. Never decides Verified/Pending here.
- * Returns null if endpoint is unavailable or doesn't return ok=true.
- */
-async function fetchVerifyMeta(
-  hash: string
-): Promise<{ submitter?: string; timestamp?: number } | null> {
-  try {
-    const normalized = normalizeHexHash(hash);
-    const data = await getJson<ChainVerifyResponse>(
-      `/api/chain/verify/${encodeURIComponent(normalized)}`
-    );
-
-    if (!data?.ok) return null;
-    return { submitter: data.submitter, timestamp: data.timestamp };
-  } catch {
-    return null;
-  }
+function isTxHash(hash?: string | null): boolean {
+  return typeof hash === 'string' && hash.startsWith('0x') && hash.length > 10;
 }
 
 function networkLabelFromReport(report: ReportDto | null): string {
@@ -76,7 +60,6 @@ function networkLabelFromReport(report: ReportDto | null): string {
   const network = report?.onChain?.network;
 
   if (network) {
-    // Ex: "sepolia" -> "Sepolia"
     return network.charAt(0).toUpperCase() + network.slice(1);
   }
   if (chainId === 11155111) return 'Sepolia';
@@ -88,13 +71,18 @@ function networkLabelFromReport(report: ReportDto | null): string {
 export default function BlockchainVerificationCard({ report }: Props) {
   const [status, setStatus] = useState<UiStatus>('Pending');
   const [isLoading, setIsLoading] = useState(false);
-  const [reportHash, setReportHash] = useState<string | null>(null);
   const [submitter, setSubmitter] = useState<string | null>(null);
   const [timestamp, setTimestamp] = useState<number | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const stableKey = report?.id ?? null;
+
+  const reportHash = report?.reportHash ?? null;
+  const txHash = report?.onChain?.txHash ?? null;
+
+  const isApproved = report?.status === 'approved';
+  const hasTxHash = isTxHash(txHash);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,38 +94,49 @@ export default function BlockchainVerificationCard({ report }: Props) {
       setLastChecked(null);
 
       if (!report) {
-        setReportHash(null);
         setStatus('Pending');
         return;
       }
 
-      // Prefer server-provided reportHash if it exists
-      const hash = report.reportHash ?? null;
-      setReportHash(hash);
+      // 🔒 HARD RULE: submitted reports are NEVER verified
+      if (!isApproved) {
+        setStatus('Pending');
+        setLastChecked(new Date());
+        return;
+      }
 
-      // 1) MongoDB/Backend is source of truth: onChain.confirmed => Verified
+      // ✅ Local truth: confirmed + txHash
       const oc = report.onChain;
-      if (oc?.registered === true && oc.status === 'confirmed') {
+      if (oc?.status === 'confirmed' && hasTxHash) {
         setStatus('Verified');
         setLastChecked(new Date());
 
-        // If backend already persists submitter/verifiedAt later, we can use them.
-        if (oc.submitter) setSubmitter(oc.submitter);
+        // Best-effort: fetch metadata (submitter + timestamp) for the UI.
+        // This must NOT affect Verified/Pending decision.
+        if (reportHash) {
+          setIsLoading(true);
+          try {
+            const normalized = normalizeHexHash(reportHash);
+            const verify = await getJson<ChainVerifyResponse>(
+              `/api/chain/verify/${encodeURIComponent(normalized)}`
+            );
 
-        // Fetch metadata (submitter + timestamp) from verify endpoint if possible
-        if (hash) {
-          const meta = await fetchVerifyMeta(hash);
-          if (!cancelled && meta) {
-            setSubmitter(meta.submitter ?? oc.submitter ?? null);
-            setTimestamp(meta.timestamp ?? null);
+            if (!cancelled && verify?.ok) {
+              setSubmitter(verify.submitter ?? null);
+              setTimestamp(verify.timestamp ?? null);
+            }
+          } catch {
+            // ignore metadata fetch errors; keep Verified UI
+          } finally {
+            if (!cancelled) setIsLoading(false);
           }
         }
 
         return;
       }
 
-      // 2) If not confirmed, try verify endpoint (only if we have a hash)
-      if (!hash) {
+      // 🔍 Only now do we verify on-chain (approved only)
+      if (!reportHash) {
         setStatus('Pending');
         setLastChecked(new Date());
         return;
@@ -146,7 +145,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
       setIsLoading(true);
 
       try {
-        const normalized = normalizeHexHash(hash);
+        const normalized = normalizeHexHash(reportHash);
         const verify = await getJson<ChainVerifyResponse>(
           `/api/chain/verify/${encodeURIComponent(normalized)}`
         );
@@ -163,7 +162,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
 
         setSubmitter(verify.submitter ?? null);
         setTimestamp(verify.timestamp ?? null);
-        setStatus(verify.isRegistered ? 'Verified' : 'Pending');
+        setStatus(verify.isRegistered && hasTxHash ? 'Verified' : 'Pending');
       } catch (err) {
         if (cancelled) return;
         setStatus('Error');
@@ -177,13 +176,17 @@ export default function BlockchainVerificationCard({ report }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [stableKey, report]);
+  }, [stableKey, report, isApproved, hasTxHash, reportHash]);
 
   const registeredAtText = timestamp
     ? new Date(timestamp * 1000).toLocaleString()
     : '—';
 
   const lastCheckedText = lastChecked ? lastChecked.toLocaleString() : '—';
+
+  const hashLabel =
+    status === 'Verified' ? 'Transaction hash' : 'Report hash (off-chain)';
+  const hashValue = status === 'Verified' ? txHash : reportHash;
 
   return (
     <Card className={['mt-6', cardTone(status)].join(' ')}>
@@ -209,9 +212,9 @@ export default function BlockchainVerificationCard({ report }: Props) {
       <CardContent>
         <div className="space-y-4">
           <div>
-            <div className="text-xs text-muted-foreground">On-chain hash</div>
+            <div className="text-xs text-muted-foreground">{hashLabel}</div>
             <div className="rounded-md border bg-white/70 px-3 py-2 font-mono text-xs break-all">
-              {reportHash ?? '—'}
+              {hashValue ?? '—'}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               Last checked: {lastCheckedText}
