@@ -4,7 +4,7 @@ const {
   listReportsByContractor,
   getReportById: getReportByIdFromDb,
   updateReportOnChain: updateReportOnChainInDb,
-  updateReportStatus,
+  updateReportStatus: updateReportStatusInDb,
 } = require('../repositories/reportRepository');
 
 const { hasIssuesFromChecklist } = require('../utils/hasIssuesFromChecklist');
@@ -324,10 +324,34 @@ async function updateReportOnChain(req, res) {
   }
 }
 
+// Update report business status (e.g. submitted -> approved)
+async function updateReportStatus(req, res) {
+  try {
+    const { reportId } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Missing status' });
+    }
+
+    const updated = await updateReportStatusInDb(reportId, status);
+
+    if (!updated) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error('[reportsController] updateReportStatus failed', err);
+    return res.status(500).json({ message: 'Failed to update report status' });
+  }
+}
+
 module.exports = {
   listReports,
   getReportById,
   createReport,
   listMyReports,
   updateReportOnChain,
+  updateReportStatus,
 };

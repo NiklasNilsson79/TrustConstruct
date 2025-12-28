@@ -66,9 +66,18 @@ function checklistPillClass(value: ChecklistValue) {
 }
 
 async function patchOnChain(reportId: string, body: any) {
+  const token = localStorage.getItem('tc_token');
+
+  if (!token) {
+    throw new Error('Missing tc_token. Please log in again.');
+  }
+
   const res = await fetch(`/api/reports/${reportId}/onchain`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
 
@@ -213,7 +222,11 @@ export default function ReportDetailPage() {
       // approveReportOnChain adds 0x-prefix + validates bytes32 length internally.
       const { txHash, blockNumber } = await approveReportOnChain(hash);
 
-      // 2) Persist on-chain result to backend
+      // 2) Update business/status (approved)
+      // Do this BEFORE setting final report state, to avoid overwriting onChain fields later.
+      await updateReportStatus(id, 'approved');
+
+      // 3) Persist on-chain result to backend (txHash must survive into UI)
       const patched = await patchOnChain(id, {
         txHash,
         blockNumber,
@@ -221,11 +234,8 @@ export default function ReportDetailPage() {
         chainError: '',
       });
 
+      // Set final state ONCE, using the object that includes onChain fields.
       setReport(patched);
-
-      // 3) Update business/status (approved)
-      const updated = await updateReportStatus(id, 'approved');
-      setReport(updated);
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : 'Failed to approve/register report';

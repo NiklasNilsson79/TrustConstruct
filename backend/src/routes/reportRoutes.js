@@ -8,6 +8,7 @@ const {
   getReportById,
   createReport,
   updateReportOnChain,
+  updateReportStatus, // set business status (submitted/approved)
 } = require('../controllers/reportsController');
 
 // auth middleware
@@ -26,6 +27,9 @@ router.post('/', requireAuth, createReport);
 // Save on-chain result (Manager Approve will call this after wallet tx)
 // Recommended to protect as well (since it updates DB state)
 router.patch('/:reportId/onchain', requireAuth, updateReportOnChain);
+
+// Update report business status (used after Manager approves on-chain)
+router.patch('/:reportId/status', requireAuth, updateReportStatus);
 
 // Get by id (optional to protect, but recommended in real app)
 router.get('/:reportId', requireAuth, getReportById);

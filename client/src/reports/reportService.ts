@@ -28,19 +28,20 @@ export type BlockchainMetaDto = {
 
 /**
  * Current backend payload shape (matches your console output):
- * onChain: { registered: true, status: 'confirmed', network: 'sepolia', chainId: 11155111, ... }
+ * onChain: { registered: false, status: 'confirmed', network: 'sepolia', chainId: 11155111, registryAddress: '0x..', txHash: '0x..', blockNumber: null, submittedAt: null, confirmedAt: null, error: '' }
  */
 export type OnChainDto = {
-  registered: boolean;
-  status: 'pending' | 'confirmed';
+  registered?: boolean;
+  status?: string; // 'confirmed' | 'failed' | ...
   network?: string;
   chainId?: number;
   registryAddress?: string;
   txHash?: string;
-  submitter?: string;
-  timestamp?: number; // seconds since epoch (if/when provided)
-  blockNumber?: number;
-  verifiedAt?: string; // ISO date (if/when provided)
+  blockNumber?: number | null;
+  submitter?: string | null;
+  submittedAt?: string | null;
+  confirmedAt?: string | null;
+  error?: string;
 };
 
 export type ReportDto = {
@@ -58,10 +59,10 @@ export type ReportDto = {
   // Matchar din backend-response
   inspection?: ReportInspectionDto;
 
-  // ✅ NYTT: server-calculated hash (seen in your console)
+  // server-calculated hash (seen in your console)
   reportHash?: string;
 
-  // ✅ NYTT: current on-chain payload (seen in your console)
+  //  current on-chain payload (seen in your console)
   onChain?: OnChainDto;
 
   // Legacy/optional – keep for now if any UI still references it
@@ -71,6 +72,13 @@ export type ReportDto = {
 // Small helper so we don't duplicate header logic
 function authHeaders(token?: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function jsonHeaders(token?: string | null): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    ...authHeaders(token),
+  };
 }
 
 /**
@@ -121,12 +129,19 @@ export async function getReport(reportId: string): Promise<ReportDto> {
   return res.json();
 }
 
+/**
+ * Update business status for a report.
+ * Backend: PATCH /api/reports/:reportId/status
+ * Body: { status: 'approved' | 'submitted' | ... }
+ */
 export async function updateReportStatus(reportId: string, status: string) {
+  const token = getToken();
+
   const res = await fetch(
     `/api/reports/${encodeURIComponent(reportId)}/status`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(token),
       body: JSON.stringify({ status }),
     }
   );
