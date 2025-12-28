@@ -311,6 +311,21 @@ async function updateReportOnChain(req, res) {
         patch['onChain.status'] = body.status;
     }
 
+    //  keep onChain.registered in sync ----
+    // If a txHash exists or status is confirmed, the report IS registered on-chain.
+    // This prevents states like: confirmed + registered=false
+    if (patch['onChain.registered'] === undefined) {
+      const hasTxHash =
+        typeof patch['onChain.txHash'] === 'string' &&
+        patch['onChain.txHash'].startsWith('0x');
+
+      const isConfirmed = patch['onChain.status'] === 'confirmed';
+
+      if (hasTxHash || isConfirmed) {
+        patch['onChain.registered'] = true;
+      }
+    }
+
     const updated = await updateReportOnChainInDb(reportId, patch);
 
     if (!updated) {
