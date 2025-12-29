@@ -2,6 +2,9 @@ const { keccak256, toUtf8Bytes } = require('ethers');
 const { canonicalizeReportForHash } = require('./canonicalReport');
 
 function sortKeysDeep(value) {
+  // FIX: treat Date as primitive
+  if (value instanceof Date) return value.toISOString();
+
   if (Array.isArray(value)) return value.map(sortKeysDeep);
 
   if (value && typeof value === 'object') {

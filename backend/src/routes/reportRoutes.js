@@ -8,8 +8,9 @@ const {
   getReportById,
   createReport,
   updateReportOnChain,
-  updateReportStatus, // set business status (submitted/approved)
+  updateReportStatus,
 } = require('../controllers/reportsController');
+const { verifyReport } = require('../controllers/reportVerifyController');
 
 // auth middleware
 const requireAuth = require('../middlewares/requireAuth');
@@ -30,6 +31,9 @@ router.patch('/:reportId/onchain', requireAuth, updateReportOnChain);
 
 // Update report business status (used after Manager approves on-chain)
 router.patch('/:reportId/status', requireAuth, updateReportStatus);
+
+// Verify (specific sub-route)
+router.get('/:reportId/verify', verifyReport);
 
 // Get by id (optional to protect, but recommended in real app)
 router.get('/:reportId', requireAuth, getReportById);

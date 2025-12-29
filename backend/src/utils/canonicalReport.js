@@ -1,14 +1,40 @@
+// backend/src/utils/canonicalReport.js
+
+function sortObjectKeys(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+
+  return Object.keys(obj)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {});
+}
+
 function canonicalizeReportForHash(report) {
-  // Endast fält som ska ingå i hash.
-  // Viktigt: inga "volatile" fält (t.ex. _id, __v, eller annat som kan ändras).
+  const inspection = report?.inspection ?? {};
+  const checklist = inspection?.checklist ?? {};
+
   return {
-    id: report.id,
-    status: report.status,
-    project: report.project,
-    location: report.location,
-    contractor: report.contractor,
-    createdAt: report.createdAt,
-    inspection: report.inspection ?? null,
+    // Business data (stable)
+    project: report?.project ?? '',
+    location: report?.location ?? '',
+    contractor: report?.contractor ?? '',
+
+    // Inspection data (stable)
+    inspection: {
+      projectId: inspection?.projectId ?? '',
+      apartmentId: inspection?.apartmentId ?? '',
+      roomId: inspection?.roomId ?? '',
+      componentId: inspection?.componentId ?? '',
+
+      // Deterministic ordering to avoid hash mismatches caused by key order
+      checklist: sortObjectKeys(checklist),
+
+      // Keep comments only if you really want comment edits to break integrity.
+      // If comments can be added later without "tampering", exclude it from hash instead.
+      comments: inspection?.comments ?? '',
+    },
   };
 }
 

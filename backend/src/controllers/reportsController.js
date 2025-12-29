@@ -150,17 +150,23 @@ async function createReport(req, res) {
     const status = hasIssues ? 'submitted' : 'approved';
 
     // --- 5) Compute report hash ---
-    const reportHash = hashReport({
+    // --- 5) Compute report hash ---
+    const createdAt = new Date();
+
+    const { hash } = hashReport({
       project,
       location,
       contractor,
-      createdAt: new Date().toISOString(),
       inspection,
+      // status/createdAt ignoreras ändå om du tagit bort dem i canonicalReport,
+      // men de skadar inte om de finns här. Det viktiga är att vi sparar hash-strängen.
       status,
+      createdAt,
     });
 
-    // --- 6) Compose report document ---
-    const createdAt = new Date();
+    // Store as hex WITHOUT 0x (matches how you’ve been storing it historically)
+    const reportHash = hash.replace(/^0x/, '').toLowerCase();
+
     const network = process.env.CHAIN_ENV || 'sepolia';
     const chainId = network === 'sepolia' ? 11155111 : null;
     const registryAddress = process.env.REPORT_REGISTRY_ADDRESS || '';

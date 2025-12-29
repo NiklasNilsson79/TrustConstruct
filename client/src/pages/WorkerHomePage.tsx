@@ -75,7 +75,6 @@ export default function WorkerHomePage() {
   });
 
   const [comments, setComments] = React.useState('');
-  const [photoUrl, setPhotoUrl] = React.useState('');
 
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
@@ -111,7 +110,6 @@ export default function WorkerHomePage() {
 
         checklist: checks,
         comments: comments.trim() || undefined,
-        photoUrl: photoUrl.trim() || undefined,
       };
 
       // 1) Create report in backend (requires auth)
@@ -336,20 +334,27 @@ export default function WorkerHomePage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Photo URL (optional)
-                </label>
-                <Input
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  placeholder="https://example.com/photo.jpg"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter a URL to an existing photo. File upload can be added
-                  later.
-                </p>
-              </div>
+              {/*
+                 TODO (future sprint):
+                 Photo URL / photo upload support.
+                 Hidden for now – feature not yet implemented or tested.
+              */}
+
+              {/*
+             <div className="space-y-2">
+             <label className="text-sm font-medium">
+             Photo URL (optional)
+             </label>
+            <Input
+            value={photoUrl}
+            onChange={(e) => setPhotoUrl(e.target.value)}
+            placeholder="https://example.com/photo.jpg"
+            />
+            <p className="text-xs text-muted-foreground">
+            Enter a URL to an existing photo. File upload can be added later.
+            </p>
+            </div>
+            */}
             </CardContent>
           </Card>
 

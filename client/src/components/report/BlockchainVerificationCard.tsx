@@ -7,6 +7,7 @@ import {
   CardDescription,
 } from '../Card';
 import type { ReportDto } from '../../reports/reportService';
+import { RefreshCcw } from 'lucide-react';
 
 type ChainVerifyResponse = {
   ok: boolean;
@@ -75,6 +76,11 @@ export default function BlockchainVerificationCard({ report }: Props) {
   const [timestamp, setTimestamp] = useState<number | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportVerify, setReportVerify] = useState<{
+    verified: boolean;
+    chainVerified: boolean;
+    integrityVerified: boolean;
+  } | null>(null);
 
   const stableKey = report?.id ?? null;
 
@@ -188,6 +194,40 @@ export default function BlockchainVerificationCard({ report }: Props) {
     status === 'Verified' ? 'Transaction hash' : 'Report hash (off-chain)';
   const hashValue = status === 'Verified' ? txHash : reportHash;
 
+  const verify = async () => {
+    if (!report?.id) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('tc_token');
+      const res = await fetch(
+        `/api/reports/${encodeURIComponent(report.id)}/verify`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Verification failed');
+      }
+
+      const data = await res.json();
+      setReportVerify(data);
+
+      // ✅ Update "Last checked" immediately after a successful manual re-check
+      setLastChecked(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Card className={['mt-6', cardTone(status)].join(' ')}>
       <CardHeader>
@@ -216,8 +256,20 @@ export default function BlockchainVerificationCard({ report }: Props) {
             <div className="rounded-md border bg-white/70 px-3 py-2 font-mono text-xs break-all">
               {hashValue ?? '—'}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Last checked: {lastCheckedText}
+
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Last checked: {lastCheckedText}</span>
+
+              <button
+                type="button"
+                onClick={verify}
+                title="Re-check against blockchain"
+                className="inline-flex items-center hover:text-foreground"
+                disabled={isLoading}>
+                <RefreshCcw
+                  className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+                />
+              </button>
             </div>
           </div>
 
@@ -245,6 +297,35 @@ export default function BlockchainVerificationCard({ report }: Props) {
               <div className="mt-1 text-sm font-medium">{registeredAtText}</div>
             </div>
           </div>
+
+          {reportVerify && (
+            <div
+              className={`rounded-lg border px-4 py-3 text-sm ${
+                reportVerify.integrityVerified
+                  ? 'border-green-200 bg-green-50 text-green-800'
+                  : 'border-red-200 bg-red-50 text-red-700'
+              }`}>
+              <strong>
+                {reportVerify.integrityVerified
+                  ? 'Blockchain integrity verified'
+                  : 'Integrity check failed'}
+              </strong>
+              <p className="mt-1">
+                {reportVerify.integrityVerified ? (
+                  <>
+                    This report matches the original version registered on the
+                    blockchain and has not been altered since it was signed.
+                  </>
+                ) : (
+                  <>
+                    This report does not match the original version registered
+                    on the blockchain. The content may have been modified after
+                    signing.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
 
           {status === 'Error' && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
