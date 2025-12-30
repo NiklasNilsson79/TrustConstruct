@@ -9,6 +9,8 @@ const Report = require('../models/Report');
 const selectDetailFields = [
   'id',
   'status',
+  'approvedBy',
+  'managerApprovalComment',
   'project',
   'location',
   'contractor',

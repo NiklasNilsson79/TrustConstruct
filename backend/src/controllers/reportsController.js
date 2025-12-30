@@ -349,13 +349,37 @@ async function updateReportOnChain(req, res) {
 async function updateReportStatus(req, res) {
   try {
     const { reportId } = req.params;
-    const { status } = req.body;
+    const { status, managerApprovalComment } = req.body;
 
     if (!status) {
       return res.status(400).json({ message: 'Missing status' });
     }
 
-    const updated = await updateReportStatusInDb(reportId, status);
+    // Default patch is just status
+    const patch = { status };
+
+    // Only on manager approval do we store approval metadata
+    if (status === 'approved') {
+      // Conservative "approvedBy" string (won't crash if fields are missing)
+      const u = req.user || {};
+      const name =
+        typeof u.name === 'string' && u.name.trim() ? u.name.trim() : 'Manager';
+      const company =
+        typeof u.company === 'string' && u.company.trim()
+          ? u.company.trim()
+          : '';
+
+      patch.approvedBy = company ? `${name} (${company})` : name;
+
+      if (typeof managerApprovalComment === 'string') {
+        patch.managerApprovalComment = managerApprovalComment.trim();
+      } else {
+        // Keep field predictable even if no comment provided
+        patch.managerApprovalComment = '';
+      }
+    }
+
+    const updated = await updateReportStatusInDb(reportId, patch);
 
     if (!updated) {
       return res.status(404).json({ message: 'Report not found' });

@@ -47,6 +47,9 @@ export type OnChainDto = {
 export type ReportDto = {
   id: string;
   status: string;
+  approvedBy?: string;
+  managerApprovalComment?: string;
+
   project?: string;
   location?: string;
   contractor?: string;
@@ -134,15 +137,23 @@ export async function getReport(reportId: string): Promise<ReportDto> {
  * Backend: PATCH /api/reports/:reportId/status
  * Body: { status: 'approved' | 'submitted' | ... }
  */
-export async function updateReportStatus(reportId: string, status: string) {
+export async function updateReportStatus(
+  reportId: string,
+  statusOrPatch: string | { status: string; managerApprovalComment?: string }
+) {
   const token = getToken();
+
+  const patch =
+    typeof statusOrPatch === 'string'
+      ? { status: statusOrPatch }
+      : statusOrPatch;
 
   const res = await fetch(
     `/api/reports/${encodeURIComponent(reportId)}/status`,
     {
       method: 'PATCH',
       headers: jsonHeaders(token),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(patch),
     }
   );
 

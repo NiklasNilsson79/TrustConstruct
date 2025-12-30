@@ -93,6 +93,17 @@ const ReportSchema = new mongoose.Schema(
       default: 'submitted',
       index: true,
     },
+    approvedBy: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    managerApprovalComment: {
+      type: String,
+      trim: true,
+      default: '',
+    },
 
     project: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },

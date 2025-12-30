@@ -65,7 +65,18 @@ function checklistPillClass(value: ChecklistValue) {
   return 'bg-slate-50 text-slate-700 border-slate-200';
 }
 
-async function patchOnChain(reportId: string, body: any) {
+type PatchOnChainBody = {
+  chainError?: string;
+  txHash?: string;
+  blockNumber?: number | null;
+  status?: string;
+  onChain?: Record<string, unknown>;
+};
+
+async function patchOnChain(
+  reportId: string,
+  body: PatchOnChainBody
+): Promise<ReportDto> {
   const token = localStorage.getItem('tc_token');
 
   if (!token) {
@@ -86,7 +97,7 @@ async function patchOnChain(reportId: string, body: any) {
     throw new Error(text || `PATCH /api/reports/${reportId}/onchain failed`);
   }
 
-  return res.json();
+  return (await res.json()) as ReportDto;
 }
 
 function formatAptRoomLine(report: ReportDto | null): string {
@@ -146,6 +157,7 @@ export default function ReportDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [managerApprovalComment, setManagerApprovalComment] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -224,7 +236,10 @@ export default function ReportDetailPage() {
 
       // 2) Update business/status (approved)
       // Do this BEFORE setting final report state, to avoid overwriting onChain fields later.
-      await updateReportStatus(id, 'approved');
+      await updateReportStatus(id, {
+        status: 'approved',
+        managerApprovalComment,
+      });
 
       // 3) Persist on-chain result to backend (txHash must survive into UI)
       const patched = await patchOnChain(id, {
@@ -233,6 +248,8 @@ export default function ReportDetailPage() {
         status: 'confirmed',
         chainError: '',
       });
+
+      console.log('patched after patchOnChain:', patched);
 
       // Set final state ONCE, using the object that includes onChain fields.
       setReport(patched);
@@ -451,18 +468,57 @@ export default function ReportDetailPage() {
                     </span>
 
                     {isManagerContext && summary.status === 'submitted' && (
-                      <button
-                        type="button"
-                        onClick={onApprove}
-                        disabled={isApproving || isLoading}
-                        className={[
-                          'inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium',
-                          'bg-white hover:bg-slate-50',
-                          'disabled:opacity-50 disabled:cursor-not-allowed',
-                        ].join(' ')}>
-                        {isApproving ? 'Approving…' : 'Approve'}
-                      </button>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-medium text-slate-700">
+                          Comment (optional)
+                        </label>
+
+                        <textarea
+                          value={managerApprovalComment}
+                          onChange={(e) =>
+                            setManagerApprovalComment(e.target.value)
+                          }
+                          rows={3}
+                          placeholder="Add an optional approval comment…"
+                          className="w-full rounded-md border px-3 py-2 text-sm"
+                          disabled={isApproving || isLoading}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={onApprove}
+                          disabled={isApproving || isLoading}
+                          className={[
+                            'inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium',
+                            'bg-white hover:bg-slate-50',
+                            'disabled:opacity-50 disabled:cursor-not-allowed',
+                          ].join(' ')}>
+                          {isApproving ? 'Approving…' : 'Approve'}
+                        </button>
+                      </div>
                     )}
+                    {isManagerContext &&
+                      summary.status === 'approved' &&
+                      (report?.approvedBy?.trim() ||
+                        report?.managerApprovalComment?.trim()) && (
+                        <div className="mt-2 space-y-2 rounded-md border bg-slate-50 p-3">
+                          {report?.approvedBy?.trim() ? (
+                            <div className="text-xs text-slate-700">
+                              <span className="font-medium">Approved by:</span>{' '}
+                              {report.approvedBy}
+                            </div>
+                          ) : null}
+
+                          {report?.managerApprovalComment?.trim() ? (
+                            <div className="text-xs text-slate-700">
+                              <div className="font-medium">Comment:</div>
+                              <div className="whitespace-pre-wrap">
+                                {report.managerApprovalComment}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                   </div>
                 </div>
 
