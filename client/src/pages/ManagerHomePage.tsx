@@ -15,6 +15,11 @@ type ReportRow = {
   contractor: string;
   date: string; // display string for now
   status: ReportStatus;
+
+  inspection?: {
+    apartmentId?: string;
+    roomId?: string;
+  };
 };
 
 function statusPillClass(status: ReportStatus) {
@@ -47,6 +52,8 @@ function mapDtoToRow(dto: ReportDto): ReportRow {
         })
       : '—',
     status: mapDtoStatusToUi(dto.status),
+
+    inspection: dto.inspection, // ← DETTA SAKNADES
   };
 }
 
@@ -297,7 +304,12 @@ export default function ManagerHomePage() {
                         </Link>
                       </td>
                       <td className="px-6 py-4">{r.project}</td>
-                      <td className="px-6 py-4 text-slate-600">{r.location}</td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {r.inspection?.apartmentId && r.inspection?.roomId
+                          ? `Apartment ${r.inspection.apartmentId} / Room ${r.inspection.roomId}`
+                          : r.location}
+                      </td>
+
                       <td className="px-6 py-4">{r.contractor}</td>
                       <td className="px-6 py-4 text-slate-600">{r.date}</td>
                       <td className="px-6 py-4">
