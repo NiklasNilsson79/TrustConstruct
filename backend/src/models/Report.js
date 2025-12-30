@@ -1,4 +1,3 @@
-// backend/src/models/Report.js
 const mongoose = require('mongoose');
 
 const ChecklistValueEnum = ['OK', 'NOT_OK', 'NA'];

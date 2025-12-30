@@ -119,8 +119,8 @@ async function createReport(req, res) {
     };
 
     // --- 3) Normalize top-level required fields (project/location/contractor) ---
-    // IMPORTANT: Your schema requires these. If UI doesn't provide them yet, we set safe defaults.
-    // You can tighten this later once UI collects them.
+    // IMPORTANT:  schema requires these. If UI doesn't provide them yet, we set safe defaults.
+    // I can tighten this later once UI collects them.
     const project =
       providedProject || inspection.projectId || 'UNKNOWN_PROJECT';
     const location = providedLocation || 'UNKNOWN_LOCATION';
@@ -150,7 +150,6 @@ async function createReport(req, res) {
     const status = hasIssues ? 'submitted' : 'approved';
 
     // --- 5) Compute report hash ---
-    // --- 5) Compute report hash ---
     const createdAt = new Date();
 
     const { hash } = hashReport({
@@ -158,7 +157,7 @@ async function createReport(req, res) {
       location,
       contractor,
       inspection,
-      // status/createdAt ignoreras ändå om du tagit bort dem i canonicalReport,
+      // status/createdAt ignoreras ändå om jag tagit bort dem i canonicalReport,
       // men de skadar inte om de finns här. Det viktiga är att vi sparar hash-strängen.
       status,
       createdAt,

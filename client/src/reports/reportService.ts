@@ -15,7 +15,7 @@ export type ReportInspectionDto = {
 
 /**
  * Legacy/optional shape (kept to avoid breaking existing code).
- * Your backend payload (per console) currently uses `onChain` instead.
+ * backend payload (per console) currently uses `onChain` instead.
  */
 export type BlockchainMetaDto = {
   txHash: string;

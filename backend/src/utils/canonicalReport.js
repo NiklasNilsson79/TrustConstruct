@@ -1,5 +1,3 @@
-// backend/src/utils/canonicalReport.js
-
 function sortObjectKeys(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
 
@@ -31,7 +29,7 @@ function canonicalizeReportForHash(report) {
       // Deterministic ordering to avoid hash mismatches caused by key order
       checklist: sortObjectKeys(checklist),
 
-      // Keep comments only if you really want comment edits to break integrity.
+      // Keep comments only if we really want comment edits to break integrity.
       // If comments can be added later without "tampering", exclude it from hash instead.
       comments: inspection?.comments ?? '',
     },

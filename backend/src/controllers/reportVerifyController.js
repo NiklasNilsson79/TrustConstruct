@@ -1,4 +1,3 @@
-// backend/src/controllers/reportVerifyController.js
 const {
   getReportById: getReportByIdFromDb,
 } = require('../repositories/reportRepository');

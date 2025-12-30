@@ -1,5 +1,3 @@
-// backend/src/utils/hasIssuesFromChecklist.js
-
 function normalizeValue(v) {
   if (v === null || v === undefined) return '';
   return String(v).trim().toUpperCase();

@@ -104,14 +104,14 @@ export default function BlockchainVerificationCard({ report }: Props) {
         return;
       }
 
-      // 🔒 HARD RULE: submitted reports are NEVER verified
+      // HARD RULE: submitted reports are NEVER verified
       if (!isApproved) {
         setStatus('Pending');
         setLastChecked(new Date());
         return;
       }
 
-      // ✅ Local truth: confirmed + txHash
+      // Local truth: confirmed + txHash
       const oc = report.onChain;
       if (oc?.status === 'confirmed' && hasTxHash) {
         setStatus('Verified');
@@ -141,7 +141,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
         return;
       }
 
-      // 🔍 Only now do we verify on-chain (approved only)
+      //  Only now do we verify on-chain (approved only)
       if (!reportHash) {
         setStatus('Pending');
         setLastChecked(new Date());
@@ -219,7 +219,7 @@ export default function BlockchainVerificationCard({ report }: Props) {
       const data = await res.json();
       setReportVerify(data);
 
-      // ✅ Update "Last checked" immediately after a successful manual re-check
+      //  Update "Last checked" immediately after a successful manual re-check
       setLastChecked(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');

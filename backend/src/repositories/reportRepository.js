@@ -1,4 +1,3 @@
-// backend/src/repositories/reportRepository.js
 const mongoose = require('mongoose');
 const Report = require('../models/Report');
 

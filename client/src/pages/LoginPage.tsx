@@ -1,4 +1,3 @@
-// client/src/pages/LoginPage.tsx
 import AppLogo from '../components/brand/AppLogo';
 
 import * as React from 'react';

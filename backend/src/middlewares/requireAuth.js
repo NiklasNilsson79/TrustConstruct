@@ -1,4 +1,3 @@
-// backend/src/middleware/requireAuth.js
 const jwt = require('jsonwebtoken');
 
 function requireAuth(req, res, next) {
@@ -14,7 +13,7 @@ function requireAuth(req, res, next) {
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    // VIKTIGT: dessa nycklar måste matcha hur ni signar token i authController
+    // VIKTIGT: dessa nycklar måste matcha hur vi signar token i authController
     req.user = {
       userId: payload.userId || payload.id || payload.sub,
       name: payload.name,

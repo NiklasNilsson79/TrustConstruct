@@ -1,4 +1,3 @@
-// backend/src/controllers/authController.js
 const jwt = require('jsonwebtoken');
 
 const USERS = [
@@ -43,7 +42,7 @@ function login(req, res) {
   }
 
   // Demo-auth: vi kräver bara att password är ifyllt.
-  // Vill du ha riktiga lösenord per user, säg vad de ska vara så lägger vi in det här.
+
   if (String(password).trim().length === 0) {
     return res.status(401).json({ message: 'Invalid password' });
   }

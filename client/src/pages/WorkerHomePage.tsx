@@ -129,7 +129,7 @@ export default function WorkerHomePage() {
 
       const created = await res.json();
 
-      // =========================================================
+      // ==================================================
       // STEP 1: Guard against Worker signing when report is submitted.
       // Only proceed with wallet/on-chain registration when status === 'approved'.
       // If status === 'submitted' (at least one NOT_OK), abort before any ethers calls.
