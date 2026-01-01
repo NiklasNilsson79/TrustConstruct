@@ -51,7 +51,7 @@ This provides **traceability, transparency, and long-term reliability** for cons
 - Node.js / Express
 - Worker authentication
 - Cryptographic hashing (SHA-256)
-- MongoDB or (or JSON during prototype phase)
+- MongoDB (local development, off-chain storage)
 - OKX Wallet integration (company-owned) for blockchain anchoring
 - REST API for submissions and verifications
 
@@ -65,23 +65,90 @@ This provides **traceability, transparency, and long-term reliability** for cons
 
 ---
 
+## 🧪 Local Development Setup
+
+### Prerequisites
+
+- Node.js v18 or later
+- MongoDB Community Edition
+- OKX Wallet (Sepolia testnet)
+
+The project does not depend on any specific MongoDB data path or service manager.
+
+---
+
+### Start MongoDB (Local)
+
+MongoDB can be started in any standard way depending on the local environment.
+
+Example (manual start):
+
+```
+mongod --dbpath <your-local-db-path>
+```
+
+Example (system service):
+
+```
+brew services start mongodb-community
+```
+
+---
+
+### Backend
+
+```
+cd backend
+npm install
+npm start
+```
+
+Backend runs on:
+
+```
+http://localhost:4000
+```
+
+---
+
+### Frontend
+
+```
+cd client
+npm install
+npm run dev
+```
+
+Frontend runs on:
+
+```
+http://localhost:5173
+```
+
+---
+
+### Environment Variables
+
+Create a `.env` file in `/backend`:
+
+```
+MONGO_URI=mongodb://127.0.0.1:27017/trustconstruct
+PORT=4000
+```
+
+---
+
 ## 🔧 How the System Works (Simplified Flow)
 
 1. Worker opens the application
 2. Authenticates via internal login (name + PIN or worker ID)
 3. Selects project → apartment → room → component
 4. Fills out AMA-referenced control form
-5. Backend logs:
-   - worker identity
-   - timestamp
-   - full human-readable report
+5. Backend logs worker identity, timestamp, and full human-readable report
 6. Backend computes SHA-256 hash
-7. Backend uses the **company-owned OKX Wallet** to anchor hash + metadata on Sepolia
-8. During verification:
-   - stored report is fetched
-   - hash is recomputed
-   - compared with the blockchain value
-   - if equal → **Verified ✔**
+7. Backend uses the company-owned OKX Wallet to anchor hash and metadata on Sepolia
+8. During verification, the stored report is fetched, the hash is recomputed, and compared with the blockchain value
+9. If the values match, the report is verified
 
 ---
 
@@ -91,9 +158,9 @@ When a report is submitted:
 
 - The full report is stored securely in the backend
 - Backend computes a SHA-256 hash
-- Hash + metadata is written to the blockchain on Sepolia via the company OKX Wallet
+- Hash and metadata are written to the blockchain on Sepolia via the company OKX Wallet
 
-On-chain data contains **no personal information**, only a cryptographic fingerprint.
+On-chain data contains no personal information, only a cryptographic fingerprint.
 
 For verification:
 
@@ -101,7 +168,7 @@ For verification:
 - A new hash is computed
 - The system checks if it matches the blockchain hash
 
-Matching values prove the report has **never been altered**.
+Matching values prove the report has never been altered.
 
 ---
 
@@ -120,32 +187,24 @@ Matching values prove the report has **never been altered**.
 
 ```
 trustconstruct/
- ├── client/           # React frontend
- ├── contracts/        # Solidity smart contracts + Foundry tests
- ├── backend/          # Node.js/Express backend (off-chain storage + hashing)
- │    ├── src/
- │    │    ├── config/
- │    │    ├── controllers/
- │    │    ├── models/
- │    │    ├── routes/
- │    │    ├── services/
- │    │    ├── middlewares/
- │    │    └── utils/
- │    └── tests/
- ├── docs/             # Documentation and project plan
- ├── scripts/          # Deployment and utility scripts (Foundry)
- ├── README.md
- └── foundry.toml
-
+├── client/
+├── contracts/
+├── backend/
+│   └── src/
+│
+├── docs/
+├── scripts/
+├── README.md
+└── foundry.toml
 ```
 
 ---
 
 ## 👤 About the Author
 
-**Niklas Nilsson**  
-Construction Entrepreneur with 20+ years of experience in building, site coordination and quality documentation.  
-Now transitioning into blockchain development to bring transparency, trust and digital innovation to the construction sector.
+Niklas Nilsson  
+Construction entrepreneur with 20+ years of experience in building, site coordination, and quality documentation.  
+Now transitioning into blockchain development to bring transparency, trust, and digital innovation to the construction sector.
 
 ---
 
