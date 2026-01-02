@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import type { Eip1193Provider } from 'ethers';
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const SEPOLIA_CHAIN_ID_HEX = '0xaa36a7';
@@ -41,7 +42,8 @@ async function ensureSepolia(provider: ethers.BrowserProvider) {
 export async function approveReportOnChain(
   reportHash: string
 ): Promise<{ txHash: string; blockNumber: number }> {
-  const { ethereum } = window as any;
+  const ethereum = (window as unknown as { ethereum?: Eip1193Provider })
+    .ethereum;
   if (!ethereum) throw new Error('No injected wallet found (OKX).');
 
   const provider = new ethers.BrowserProvider(ethereum);
