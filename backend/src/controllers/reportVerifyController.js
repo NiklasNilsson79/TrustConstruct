@@ -43,7 +43,32 @@ async function verifyReport(req, res) {
     // 2) Compare recomputed vs stored
     const matchesStoredHash = recomputedHex === report.reportHash;
 
-    // 3) Verify stored hash exists on-chain
+    // ---- HARD BLOCK: pending/submitted must NEVER verify on-chain ----
+    // Only approved reports are eligible for chain verification.
+    // (UI may show integrityVerified separately if you want.)
+    const status = report.status; // e.g. "submitted" | "approved"
+    if (status !== 'approved') {
+      return res.status(200).json({
+        verified: false,
+        chainVerified: false,
+        integrityVerified: Boolean(matchesStoredHash),
+        matchesStoredHash,
+        recomputedHash: recomputed,
+        recomputedHex,
+        storedHash: report.reportHash,
+        reason: 'NOT_REGISTERED_YET',
+        status,
+        expectedStatus: 'approved',
+        onChain: {
+          isRegistered: false,
+          submitter: null,
+          timestamp: null,
+        },
+      });
+    }
+    // ---------------------------------------------------------------
+
+    // 3) Verify stored hash exists on-chain (only for approved)
     const bytes32Hash = report.reportHash.startsWith('0x')
       ? report.reportHash
       : `0x${report.reportHash}`;
@@ -52,16 +77,21 @@ async function verifyReport(req, res) {
 
     const chainVerified = Boolean(chain.isRegistered);
     const integrityVerified = Boolean(matchesStoredHash);
+
+    // If you want "green" to require BOTH on-chain + integrity match:
+    // const verified = chainVerified && integrityVerified;
+    // If you strictly want "verified" to mean "exists on-chain" only:
     const verified = chainVerified;
 
     return res.status(200).json({
-      verified, // = chainVerified
-      chainVerified, // hash exists on-chain
-      integrityVerified, // recomputed === stored
-      matchesStoredHash, // behåll (debug/insyn)
+      verified,
+      chainVerified,
+      integrityVerified,
+      matchesStoredHash,
       recomputedHash: recomputed,
       recomputedHex,
       storedHash: report.reportHash,
+      status,
       onChain: {
         isRegistered: chain.isRegistered,
         submitter: chain.submitter ?? null,

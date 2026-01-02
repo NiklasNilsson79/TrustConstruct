@@ -85,10 +85,25 @@ export default function BlockchainVerificationCard({ report }: Props) {
   const stableKey = report?.id ?? null;
 
   const reportHash = report?.reportHash ?? null;
-  const txHash = report?.onChain?.txHash ?? null;
+  const txHash = report?.onChain?.txHash || '';
 
   const isApproved = report?.status === 'approved';
   const hasTxHash = isTxHash(txHash);
+
+  useEffect(() => {
+    if (!report) return;
+    if (report.status !== 'approved') return;
+    if (!txHash) return;
+
+    // If we previously verified while pending (chainVerified=false),
+    // auto re-verify after approval/signing to avoid stale UI.
+    if (reportVerify && reportVerify.chainVerified === false) {
+      verify();
+    }
+
+    // We intentionally keep deps minimal to avoid loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report?.status, txHash]);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +243,11 @@ export default function BlockchainVerificationCard({ report }: Props) {
     }
   };
 
+  const isBlockchainIntegrityVerified =
+    report?.status === 'approved' &&
+    reportVerify?.chainVerified === true &&
+    reportVerify?.integrityVerified === true;
+
   return (
     <Card className={['mt-6', cardTone(status)].join(' ')}>
       <CardHeader>
@@ -301,20 +321,31 @@ export default function BlockchainVerificationCard({ report }: Props) {
           {reportVerify && (
             <div
               className={`rounded-lg border px-4 py-3 text-sm ${
-                reportVerify.integrityVerified
+                isBlockchainIntegrityVerified
                   ? 'border-green-200 bg-green-50 text-green-800'
+                  : report?.status !== 'approved'
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
                   : 'border-red-200 bg-red-50 text-red-700'
               }`}>
               <strong>
-                {reportVerify.integrityVerified
+                {isBlockchainIntegrityVerified
                   ? 'Blockchain integrity verified'
+                  : report?.status !== 'approved'
+                  ? 'Not registered on-chain yet'
                   : 'Integrity check failed'}
               </strong>
+
               <p className="mt-1">
-                {reportVerify.integrityVerified ? (
+                {isBlockchainIntegrityVerified ? (
                   <>
                     This report matches the original version registered on the
                     blockchain and has not been altered since it was signed.
+                  </>
+                ) : report?.status !== 'approved' ? (
+                  <>
+                    This report is currently pending/submitted and has not been
+                    registered on-chain. A manager must approve and sign the
+                    report before blockchain verification is possible.
                   </>
                 ) : (
                   <>
