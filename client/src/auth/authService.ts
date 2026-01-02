@@ -1,21 +1,21 @@
-import type { AuthUser, UserRole } from './authTypes';
+import type { AuthUser, BackendUser, UserRole } from './authTypes';
 
 type LoginResponse = {
   token: string;
   user: AuthUser;
 };
 
-type BackendUser = {
-  id?: string;
-  _id?: string;
-  email: string;
-  role: UserRole;
-};
-
 function normalizeUser(u: BackendUser): AuthUser {
   const id = u.id ?? u._id;
   if (!id) throw new Error('Invalid user payload (missing id/_id).');
-  return { id, email: u.email, role: u.role };
+
+  return {
+    id,
+    name: u.name,
+    company: u.company,
+    role: u.role,
+    email: u.email ?? '',
+  };
 }
 
 // RIKTIG login (backend)
@@ -62,6 +62,12 @@ export async function loginFake(
 
   return {
     token: 'fake-jwt-token',
-    user: { id: 'u_123', email, role },
+    user: {
+      id: 'u_123',
+      email,
+      role,
+      name: 'Demo User',
+      company: 'Demo Company',
+    },
   };
 }
