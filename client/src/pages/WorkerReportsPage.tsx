@@ -23,7 +23,7 @@ function statusPillClass(status: ChainStatus) {
   return 'bg-red-50 text-red-700 border-red-200';
 }
 
-// Temporärt: vi har ingen riktig chain-verification ännu.
+// UI mapping while full on-chain verification is handled elsewhere.
 // Mappa report.status till något som passar UI (så du får "Pending" för submitted).
 function mapToChainStatus(report: ReportDto): ChainStatus {
   const raw = (report.status ?? '').toLowerCase();

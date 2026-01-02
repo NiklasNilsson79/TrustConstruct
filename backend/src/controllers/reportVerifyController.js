@@ -23,7 +23,7 @@ async function verifyReport(req, res) {
       report = await Report.findOne({ id: reportId }).lean();
     }
 
-    // 3) Final fallback: existing repository method (if you still want it)
+    // 3) Final fallback: repository lookup for legacy access patterns
     if (!report) {
       report = await getReportByIdFromDb(reportId);
     }

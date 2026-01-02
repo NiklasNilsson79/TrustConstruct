@@ -48,7 +48,8 @@ async function listReports() {
 
 async function listReportsByContractor(contractor) {
   // Note: contractor historically stored as "Worker"/"Manager" label.
-  // Keep as-is for now since you said lists are working.
+  // Kept for backward compatibility with existing list queries.
+
   return Report.find({ contractor }).sort({ createdAt: -1 }).lean();
 }
 

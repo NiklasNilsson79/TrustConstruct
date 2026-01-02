@@ -120,7 +120,8 @@ async function createReport(req, res) {
 
     // --- 3) Normalize top-level required fields (project/location/contractor) ---
     // IMPORTANT:  schema requires these. If UI doesn't provide them yet, we set safe defaults.
-    // I can tighten this later once UI collects them.
+    // Defaults are applied when fields are missing to satisfy schema requirements.
+
     const project =
       providedProject || inspection.projectId || 'UNKNOWN_PROJECT';
     const location = providedLocation || 'UNKNOWN_LOCATION';
@@ -157,8 +158,8 @@ async function createReport(req, res) {
       location,
       contractor,
       inspection,
-      // status/createdAt ignoreras ändå om jag tagit bort dem i canonicalReport,
-      // men de skadar inte om de finns här. Det viktiga är att vi sparar hash-strängen.
+
+      // status/createdAt are excluded from canonical hashing and do not affect integrity.
       status,
       createdAt,
     });
@@ -201,7 +202,7 @@ async function createReport(req, res) {
     // Persist to Mongo
     const created = await createReportInDb(newReport);
 
-    // Optional: legacy server-side auto-register (kept, but normally OFF in your flow)
+    // Optional legacy server-side auto-register (disabled in normal flow).
     const AUTO_REGISTER_ONCHAIN = process.env.AUTO_REGISTER_ONCHAIN === 'true';
 
     if (AUTO_REGISTER_ONCHAIN && status === 'approved') {

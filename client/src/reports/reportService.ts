@@ -54,7 +54,7 @@ export type ReportDto = {
   location?: string;
   contractor?: string;
 
-  // Finns i din nuvarande typ – behåll så länge den ev används i UI
+  // Present in existing types; retained for backward compatibility.
   inspector?: string;
 
   createdAt?: string;
@@ -62,7 +62,7 @@ export type ReportDto = {
   // Matchar din backend-response
   inspection?: ReportInspectionDto;
 
-  // server-calculated hash (seen in your console)
+  // Server-calculated report hash
   reportHash?: string;
 
   //  current on-chain payload (seen in your console)
