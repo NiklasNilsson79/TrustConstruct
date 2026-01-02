@@ -19,7 +19,8 @@ const requireAuth = require('../middlewares/requireAuth');
 router.get('/', listReports);
 router.get('/mine', requireAuth, listMyReports);
 
-// Utility route (must be BEFORE "/:reportId")
+// DEV TOOLING ONLY: computes canonical report + hash for debugging/testing.
+// Not part of the Worker/Manager approval flow.
 router.post('/hash', calculateReportHash);
 
 // Create report
@@ -33,7 +34,7 @@ router.patch('/:reportId/onchain', requireAuth, updateReportOnChain);
 router.patch('/:reportId/status', requireAuth, updateReportStatus);
 
 // Verify (specific sub-route)
-router.get('/:reportId/verify', verifyReport);
+router.get('/:reportId/verify', requireAuth, verifyReport);
 
 // Get by id (optional to protect, but recommended in real app)
 router.get('/:reportId', requireAuth, getReportById);

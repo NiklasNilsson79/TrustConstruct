@@ -1,3 +1,6 @@
+// DEV TOOLING ONLY: used during contract deployment/testing.
+// Not part of the Worker/Manager approval flow.
+
 import { useState } from 'react';
 import { BrowserProvider, ContractFactory, Contract } from 'ethers';
 import reportRegistryArtifact from '../artifacts/ReportRegistry.json';

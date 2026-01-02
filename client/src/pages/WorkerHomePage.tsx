@@ -4,9 +4,7 @@ import { Card, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { BrowserProvider, Contract } from 'ethers';
-import type { InterfaceAbi } from 'ethers';
-
-import reportRegistryArtifact from '../artifacts/ReportRegistry.json';
+import { REPORT_REGISTRY_ABI } from '../web3/reportRegistry';
 
 type CheckValue = 'OK' | 'NOT_OK' | 'NA';
 
@@ -150,7 +148,7 @@ export default function WorkerHomePage() {
         throw new Error('Missing VITE_REPORT_REGISTRY_ADDRESS in client env');
       }
 
-      const abi = reportRegistryArtifact.abi as unknown as InterfaceAbi;
+      const abi = REPORT_REGISTRY_ABI;
 
       const rawHash = created?.reportHash;
       if (!rawHash || typeof rawHash !== 'string') {
